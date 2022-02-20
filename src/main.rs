@@ -13,9 +13,9 @@ const PORT: u16 = 7654;
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct CoinsGen {
     name: [u8; 1024],
-    coin: u64,
-    inc: u64,
-    pow: u64,
+    coin: u64, // total idlecoin
+    iter: u64, // session iteration idlecoin
+    gen: u64,  // generated idlecoin
 }
 
 fn main() {
@@ -81,25 +81,50 @@ fn login(
     Ok(CoinsGen {
         name,
         coin: 0,
-        inc: 1,
-        pow: 10,
+        iter: 0,
+        gen: 0,
     })
     // Unlock generators
 }
 
+fn update_generator(
+    generators: &Arc<Mutex<Vec<CoinsGen>>>,
+    mut coin: &mut CoinsGen,
+) -> Result<(), Error> {
+    let mut gens = generators.lock().unwrap();
+    for i in gens.deref() {
+        if i.name == coin.name {
+            coin.coin = i.coin + (coin.gen - coin.iter);
+            coin.iter = coin.gen;
+        }
+    }
+    gens.retain(|x| x.name != coin.name);
+    gens.push(*coin);
+    drop(gens);
+
+    Ok(())
+}
+
 fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(), Error> {
     // Allow user session to login
-    let mut gen = login(&stream, &generators)?;
+    let mut miner = login(&stream, &generators)?;
+    //let initcoin = gen.coin;
+    miner.gen = 1;
+    miner.iter = 0;
+
+    let mut inc = 1;
+    let mut pow = 10;
 
     // Main loop
     loop {
         // Level up
-        if gen.coin % gen.pow == 0 {
-            gen.inc <<= 1;
-            gen.pow *= 10;
+        if miner.gen > pow {
+            inc <<= 1;
+            pow *= 10;
+            update_generator(&generators, &mut miner)?;
             let msg = format!(
-                "\nIdlecoin stat upgrade:\ninc: {}\npow: {}\n",
-                gen.inc, gen.pow
+                "\n===\nIdlecoin generator upgrade:\ninc: {}\npow: {}\niter: {}\nTOTAL IDLECOIN: {}\n===\n",
+                inc, pow, miner.gen, miner.coin
             );
             match stream.write_all(msg.as_bytes()) {
                 Ok(_) => (),
@@ -108,23 +133,18 @@ fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Resu
         }
 
         // Increment coins
-        let msg = format!("\ridlecoin: {}", gen.coin);
+        let msg = format!("\rIteration idlecoins: {}", miner.gen);
         match stream.write_all(msg.as_bytes()) {
             Ok(_) => (),
             Err(_) => break,
         };
-        gen.coin += gen.inc;
+        miner.gen += inc;
 
         // Rest from all that work
         sleep(time::Duration::from_millis(100));
     }
 
-    // Lock generators
-    let mut gens = generators.lock().unwrap();
-    gens.retain(|x| x.name != gen.name);
-    gens.push(gen);
-    drop(gens);
-    // Unlock generators
+    update_generator(&generators, &mut miner)?;
 
     Ok(())
 }
