@@ -30,7 +30,9 @@ fn main() {
     // Create global array of user generators
     let generators = Arc::new(Mutex::new(Vec::<CoinsGen>::new()));
 
+    // Load previous stats file
     load_stats(&generators);
+
     // Bind network listener to port
     let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT))) {
         Ok(l) => l,
@@ -48,6 +50,7 @@ fn main() {
     thread::spawn(move || {
         for sig in signals.forever() {
             if sig == SIGINT {
+                // Save the current stats file
                 save_stats(generators_save);
                 std::process::exit(0);
             }
@@ -90,6 +93,7 @@ fn login(
     let mut name_raw: [u8; 1024] = [0; 1024];
     let _ = stream.read(&mut name_raw[..]).unwrap();
 
+    // Calculate the hash of the username
     let mut hash = xxh3::Xxh3::new();
     hash.write(&name_raw);
     let name = hash.finish();
@@ -178,20 +182,30 @@ fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Resu
 fn load_stats(generators: &Arc<Mutex<Vec<CoinsGen>>>) {
     let mut j = String::new();
 
-    let mut file = File::open(&SAVE).unwrap();
+    // Attempt to open and read the saved stats file
+    let mut file = match File::open(&SAVE) {
+        Ok(f) => f,
+        Err(_) => {
+            println!("No previous stats file found");
+            return;
+        }
+    };
     file.read_to_string(&mut j).unwrap();
 
+    // Exit if file is empty
     if j.is_empty() {
         return;
     }
-    println!("Loading stats...");
 
+    // Attempt to deserialize the json file data
+    println!("Loading stats...");
     let mut c: Vec<CoinsGen> = serde_json::from_str(&j).unwrap();
     if c.is_empty() {
         println!("Failed to load {}", SAVE);
         return;
     }
 
+    // Update the generators struct
     let mut gens = generators.lock().unwrap();
     gens.append(&mut c);
     drop(gens);
@@ -200,10 +214,12 @@ fn load_stats(generators: &Arc<Mutex<Vec<CoinsGen>>>) {
 }
 
 fn save_stats(generators: Arc<Mutex<Vec<CoinsGen>>>) {
+    // Serialize the stats data to json
     println!("Saving stats...");
     let gens = generators.lock().unwrap();
     let j = serde_json::to_string(&gens.deref()).unwrap();
 
+    // Open the stats file for writing
     let mut file: File;
     file = match File::create(&SAVE) {
         Ok(f) => f,
@@ -213,6 +229,7 @@ fn save_stats(generators: Arc<Mutex<Vec<CoinsGen>>>) {
         }
     };
 
+    // Write out the json stats data
     let len = file.write(j.as_bytes()).unwrap();
     if j.len() != len {
         println!("Error writing save data to {}", SAVE);

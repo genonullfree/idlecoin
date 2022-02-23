@@ -16,3 +16,5 @@ nc 127.0.0.1 7654
 # or
 telnet localhost 7654
 ```
+
+The stats are written out to a file `.idlecoin` in the working directory of the server upon exit. On start, `idlecoin` will attempt to open `.idlecoin` and ingest the stats file to allow loading of previous stats.
