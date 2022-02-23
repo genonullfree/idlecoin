@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io::Error;
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
@@ -8,17 +9,28 @@ use std::thread;
 use std::thread::sleep;
 use std::time;
 
-const PORT: u16 = 7654;
+use serde::{Deserialize, Serialize};
+use signal_hook::{consts::SIGINT, iterator::Signals};
+use std::hash::Hasher;
+use xxhash_rust::xxh3;
+//use serde_json::Result as SerdeResult;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+const PORT: u16 = 7654;
+const SAVE: &str = ".idlecoin";
+
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct CoinsGen {
-    name: [u8; 1024],
+    name: u64, // hash of name / wallet address
     coin: u64, // total idlecoin
     iter: u64, // session iteration idlecoin
     gen: u64,  // generated idlecoin
 }
 
 fn main() {
+    // Create global array of user generators
+    let generators = Arc::new(Mutex::new(Vec::<CoinsGen>::new()));
+
+    load_stats(&generators);
     // Bind network listener to port
     let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT))) {
         Ok(l) => l,
@@ -31,8 +43,16 @@ fn main() {
         }
     };
 
-    // Create global array of user generators
-    let generators = Arc::new(Mutex::new(Vec::<CoinsGen>::new()));
+    let mut signals = Signals::new(&[SIGINT]).unwrap();
+    let generators_save = Arc::clone(&generators);
+    thread::spawn(move || {
+        for sig in signals.forever() {
+            if sig == SIGINT {
+                save_stats(generators_save);
+                std::process::exit(0);
+            }
+        }
+    });
 
     // Listen for connections
     for stream in listener.incoming() {
@@ -67,8 +87,12 @@ fn login(
     stream.write_all(msg.as_bytes())?;
 
     // Read username
-    let mut name: [u8; 1024] = [0; 1024];
-    let _ = stream.read(&mut name[..]).unwrap();
+    let mut name_raw: [u8; 1024] = [0; 1024];
+    let _ = stream.read(&mut name_raw[..]).unwrap();
+
+    let mut hash = xxh3::Xxh3::new();
+    hash.write(&name_raw);
+    let name = hash.finish();
 
     // Look for user record
     for i in gens.deref() {
@@ -113,18 +137,20 @@ fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Resu
     miner.iter = 0;
 
     let mut inc = 1;
+    let mut level = 1;
     let mut pow = 10;
 
     // Main loop
     loop {
         // Level up
         if miner.gen > pow {
-            inc <<= 1;
+            level += 1;
+            inc = 1 << level;
             pow *= 10;
             update_generator(&generators, &mut miner)?;
             let msg = format!(
-                "\n===\nIdlecoin generator upgrade:\ninc: {}\npow: {}\niter: {}\nTOTAL IDLECOIN: {}\n===\n",
-                inc, pow, miner.gen, miner.coin
+                "\n===\nIdlecoin generator upgrade to level: {}\nIDLECOIN wallet: {}\nIDLECOIN generated: {}\n===\n",
+                level, miner.coin, miner.gen
             );
             match stream.write_all(msg.as_bytes()) {
                 Ok(_) => (),
@@ -133,7 +159,7 @@ fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Resu
         }
 
         // Increment coins
-        let msg = format!("\rIteration idlecoins: {}", miner.gen);
+        let msg = format!("\rGenerating idlecoins: {}", miner.gen);
         match stream.write_all(msg.as_bytes()) {
             Ok(_) => (),
             Err(_) => break,
@@ -147,4 +173,51 @@ fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Resu
     update_generator(&generators, &mut miner)?;
 
     Ok(())
+}
+
+fn load_stats(generators: &Arc<Mutex<Vec<CoinsGen>>>) {
+    let mut j = String::new();
+
+    let mut file = File::open(&SAVE).unwrap();
+    file.read_to_string(&mut j).unwrap();
+
+    if j.is_empty() {
+        return;
+    }
+    println!("Loading stats...");
+
+    let mut c: Vec<CoinsGen> = serde_json::from_str(&j).unwrap();
+    if c.is_empty() {
+        println!("Failed to load {}", SAVE);
+        return;
+    }
+
+    let mut gens = generators.lock().unwrap();
+    gens.append(&mut c);
+    drop(gens);
+
+    println!("Successfully loaded stats file {}", SAVE);
+}
+
+fn save_stats(generators: Arc<Mutex<Vec<CoinsGen>>>) {
+    println!("Saving stats...");
+    let gens = generators.lock().unwrap();
+    let j = serde_json::to_string(&gens.deref()).unwrap();
+
+    let mut file: File;
+    file = match File::create(&SAVE) {
+        Ok(f) => f,
+        Err(_) => {
+            println!("Error opening {} for writing!", SAVE);
+            return;
+        }
+    };
+
+    let len = file.write(j.as_bytes()).unwrap();
+    if j.len() != len {
+        println!("Error writing save data to {}", SAVE);
+        return;
+    }
+
+    println!("Successfully saved data to {}", SAVE);
 }
