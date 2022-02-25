@@ -20,10 +20,11 @@ const SAVE: &str = ".idlecoin";
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct CoinsGen {
-    name: u64, // hash of name / wallet address
-    coin: u64, // total idlecoin
-    iter: u64, // session iteration idlecoin
-    gen: u64,  // generated idlecoin
+    name: u64,  // hash of name / wallet address
+    coin: u64,  // total idlecoin
+    iter: u64,  // session iteration idlecoin
+    gen: u64,   // generated idlecoin
+    level: u64, // current level
 }
 
 fn main() {
@@ -111,6 +112,7 @@ fn login(
         coin: 0,
         iter: 0,
         gen: 0,
+        level: 0,
     })
     // Unlock generators
 }
@@ -133,42 +135,62 @@ fn update_generator(
     Ok(())
 }
 
-fn session(mut stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(), Error> {
+fn print_generators(
+    mut stream: &TcpStream,
+    coin: &CoinsGen,
+    generators: &Arc<Mutex<Vec<CoinsGen>>>,
+) -> bool {
+    let mut msg = "\r+++\n".to_string();
+    for g in generators.lock().unwrap().deref() {
+        if g.name == coin.name {
+            msg += &format!(
+                "Wallet 0x{:016x} coins: {}, level: {} <= ***\n",
+                coin.name, coin.coin, coin.level
+            )
+            .to_owned()
+        } else {
+            msg += &format!(
+                "Wallet 0x{:016x} coins: {}, level: {}\n",
+                g.name, g.coin, g.level
+            )
+            .to_owned()
+        };
+    }
+    if stream.write_all(msg.as_bytes()).is_err() {
+        return false;
+    }
+
+    true
+}
+
+fn session(stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(), Error> {
     // Allow user session to login
     let mut miner = login(&stream, &generators)?;
     //let initcoin = gen.coin;
     miner.gen = 1;
     miner.iter = 0;
+    miner.level = 1;
 
     let mut inc = 1;
-    let mut level = 1;
     let mut pow = 10;
 
     // Main loop
     loop {
+        // Increment coins
+        miner.gen += inc;
+        update_generator(&generators, &mut miner)?;
+
         // Level up
         if miner.gen > pow {
-            level += 1;
-            inc = 1 << level;
+            miner.level += 1;
+            inc = 1 << miner.level;
             pow *= 10;
-            update_generator(&generators, &mut miner)?;
-            let msg = format!(
-                "\n===\nIdlecoin generator upgrade to level: {}\nIDLECOIN wallet: {}\nIDLECOIN generated: {}\n===\n",
-                level, miner.coin, miner.gen
-            );
-            match stream.write_all(msg.as_bytes()) {
-                Ok(_) => (),
-                Err(_) => break,
-            };
         }
 
-        // Increment coins
-        let msg = format!("\rGenerating idlecoins: {}", miner.gen);
-        match stream.write_all(msg.as_bytes()) {
-            Ok(_) => (),
-            Err(_) => break,
-        };
-        miner.gen += inc;
+        // Print updates
+        if !print_generators(&stream, &miner, &generators) {
+            break;
+        }
 
         // Rest from all that work
         sleep(time::Duration::from_millis(100));
