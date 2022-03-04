@@ -18,7 +18,7 @@ use xxhash_rust::xxh3;
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 struct Wallet {
     name: u64,  // hash of name / wallet address
     coin: u64,  // total idlecoin
@@ -137,8 +137,11 @@ fn print_generators(
     coin: &Wallet,
     generators: &Arc<Mutex<Vec<Wallet>>>,
 ) -> bool {
-    let mut msg = "\r+++\n".to_string();
-    for g in generators.lock().unwrap().deref() {
+    let mut msg = "+++\n".to_string();
+    let mut gens = generators.lock().unwrap().deref().clone();
+    gens.sort_by(|a, b| b.coin.cmp(&a.coin));
+
+    for g in gens {
         if g.name == coin.name {
             msg += &format!(
                 "Wallet 0x{:016x} coins: {}, level: {} <= ***\n",
