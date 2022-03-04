@@ -7,19 +7,19 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
-use std::time;
+use std::time::{Duration, Instant};
 
+use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use std::hash::Hasher;
 use xxhash_rust::xxh3;
-//use serde_json::Result as SerdeResult;
 
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct CoinsGen {
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+struct Wallet {
     name: u64,  // hash of name / wallet address
     coin: u64,  // total idlecoin
     iter: u64,  // session iteration idlecoin
@@ -29,7 +29,7 @@ struct CoinsGen {
 
 fn main() {
     // Create global array of user generators
-    let generators = Arc::new(Mutex::new(Vec::<CoinsGen>::new()));
+    let generators = Arc::new(Mutex::new(Vec::<Wallet>::new()));
 
     // Load previous stats file
     load_stats(&generators);
@@ -76,10 +76,7 @@ fn main() {
     }
 }
 
-fn login(
-    mut stream: &TcpStream,
-    generators: &Arc<Mutex<Vec<CoinsGen>>>,
-) -> Result<CoinsGen, Error> {
+fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Lock generators
     let gens = generators.lock().unwrap();
 
@@ -107,7 +104,7 @@ fn login(
     }
 
     // Create new record
-    Ok(CoinsGen {
+    Ok(Wallet {
         name,
         coin: 0,
         iter: 0,
@@ -118,8 +115,8 @@ fn login(
 }
 
 fn update_generator(
-    generators: &Arc<Mutex<Vec<CoinsGen>>>,
-    mut coin: &mut CoinsGen,
+    generators: &Arc<Mutex<Vec<Wallet>>>,
+    mut coin: &mut Wallet,
 ) -> Result<(), Error> {
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
@@ -137,23 +134,22 @@ fn update_generator(
 
 fn print_generators(
     mut stream: &TcpStream,
-    coin: &CoinsGen,
-    generators: &Arc<Mutex<Vec<CoinsGen>>>,
+    coin: &Wallet,
+    generators: &Arc<Mutex<Vec<Wallet>>>,
 ) -> bool {
-    let mut msg = "\r+++\n".to_string();
-    for g in generators.lock().unwrap().deref() {
+    let mut msg = "+++\n".to_string();
+    let mut gens = generators.lock().unwrap().deref().clone();
+    gens.sort_by(|a, b| b.coin.cmp(&a.coin));
+
+    for g in gens {
         if g.name == coin.name {
             msg += &format!(
                 "Wallet 0x{:016x} coins: {}, level: {} <= ***\n",
-                coin.name, coin.coin, coin.level
+                coin.name, coin.coin, coin.level,
             )
             .to_owned()
         } else {
-            msg += &format!(
-                "Wallet 0x{:016x} coins: {}, level: {}\n",
-                g.name, g.coin, g.level
-            )
-            .to_owned()
+            msg += &format!("Wallet 0x{:016x} coins: {}\n", g.name, g.coin,).to_owned()
         };
     }
     if stream.write_all(msg.as_bytes()).is_err() {
@@ -163,7 +159,32 @@ fn print_generators(
     true
 }
 
-fn session(stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(), Error> {
+fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
+    let mut rng = rand::thread_rng();
+    let x: u16 = rng.gen();
+
+    if x % 1000 == 0 {
+        if stream
+            .write_all("Congrats! You've leveled up!\n".as_bytes())
+            .is_err()
+        {
+            return false;
+        };
+        miner.level += 1;
+    }
+    if x % 100 == 0 {
+        if stream
+            .write_all("Congrats! You've won 100 free idlecoins!\n".as_bytes())
+            .is_err()
+        {
+            return false;
+        }
+        miner.gen += 100;
+    }
+    true
+}
+
+fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
     // Allow user session to login
     let mut miner = login(&stream, &generators)?;
     //let initcoin = gen.coin;
@@ -174,10 +195,17 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(
     let mut inc = 1;
     let mut pow = 10;
 
+    let mut update = Instant::now();
+
     // Main loop
     loop {
         // Increment coins
         miner.gen += inc;
+
+        if !action(&stream, &mut miner) {
+            break;
+        }
+
         update_generator(&generators, &mut miner)?;
 
         // Level up
@@ -188,12 +216,15 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(
         }
 
         // Print updates
-        if !print_generators(&stream, &miner, &generators) {
-            break;
+        if update.elapsed().as_secs() >= 1 {
+            if !print_generators(&stream, &miner, &generators) {
+                break;
+            }
+            update = Instant::now();
         }
 
         // Rest from all that work
-        sleep(time::Duration::from_millis(100));
+        sleep(Duration::from_millis(100));
     }
 
     update_generator(&generators, &mut miner)?;
@@ -201,7 +232,7 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<CoinsGen>>>) -> Result<(
     Ok(())
 }
 
-fn load_stats(generators: &Arc<Mutex<Vec<CoinsGen>>>) {
+fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
     let mut j = String::new();
 
     // Attempt to open and read the saved stats file
@@ -216,12 +247,13 @@ fn load_stats(generators: &Arc<Mutex<Vec<CoinsGen>>>) {
 
     // Exit if file is empty
     if j.is_empty() {
+        println!("No data to load");
         return;
     }
 
     // Attempt to deserialize the json file data
     println!("Loading stats...");
-    let mut c: Vec<CoinsGen> = serde_json::from_str(&j).unwrap();
+    let mut c: Vec<Wallet> = serde_json::from_str(&j).unwrap();
     if c.is_empty() {
         println!("Failed to load {}", SAVE);
         return;
@@ -235,7 +267,7 @@ fn load_stats(generators: &Arc<Mutex<Vec<CoinsGen>>>) {
     println!("Successfully loaded stats file {}", SAVE);
 }
 
-fn save_stats(generators: Arc<Mutex<Vec<CoinsGen>>>) {
+fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
     // Serialize the stats data to json
     println!("Saving stats...");
     let gens = generators.lock().unwrap();
