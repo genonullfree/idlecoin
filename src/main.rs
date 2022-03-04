@@ -9,11 +9,11 @@ use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use std::hash::Hasher;
 use xxhash_rust::xxh3;
-//use serde_json::Result as SerdeResult;
 
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
@@ -159,6 +159,31 @@ fn print_generators(
     true
 }
 
+fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
+    let mut rng = rand::thread_rng();
+    let x: u16 = rng.gen();
+
+    if x % 1000 == 0 {
+        if stream
+            .write_all("Congrats! You've leveled up!\n".as_bytes())
+            .is_err()
+        {
+            return false;
+        };
+        miner.level += 1;
+    }
+    if x % 100 == 0 {
+        if stream
+            .write_all("Congrats! You've won 100 free idlecoins!\n".as_bytes())
+            .is_err()
+        {
+            return false;
+        }
+        miner.gen += 100;
+    }
+    true
+}
+
 fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
     // Allow user session to login
     let mut miner = login(&stream, &generators)?;
@@ -176,6 +201,11 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
     loop {
         // Increment coins
         miner.gen += inc;
+
+        if !action(&stream, &mut miner) {
+            break;
+        }
+
         update_generator(&generators, &mut miner)?;
 
         // Level up
