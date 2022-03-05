@@ -129,7 +129,9 @@ fn update_generator(
                 Some(c) => c,
                 None => {
                     coin.idle += 1;
-                    0 // Todo fix this
+                    let x: u128 =
+                        (i.coin as u128 + (coin.gen - coin.iter) as u128) % u64::MAX as u128;
+                    x as u64
                 }
             };
             coin.iter = coin.gen;
@@ -187,9 +189,9 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     } else if x % 100 == 0 {
         msg = format!(
             "Congrats! You've won {} free idlecoins!\n",
-            1 << (miner.level * 2)
+            1 << (miner.level * 3)
         );
-        miner.gen += 1 << (miner.level * 2);
+        miner.gen += 1 << (miner.level * 3);
     }
 
     if !msg.is_empty() && stream.write_all(msg.as_bytes()).is_err() {
