@@ -21,7 +21,8 @@ const SAVE: &str = ".idlecoin";
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 struct Wallet {
     name: u64,  // hash of name / wallet address
-    coin: u64,  // total idlecoin
+    idle: u64,  // total idlecoin
+    coin: u64,  // decimal idlecoin
     iter: u64,  // session iteration idlecoin
     gen: u64,   // generated idlecoin
     level: u64, // current level
@@ -107,6 +108,7 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Create new record
     Ok(Wallet {
         name,
+        idle: 0,
         coin: 0,
         iter: 0,
         gen: 0,
@@ -123,7 +125,13 @@ fn update_generator(
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
         if i.name == coin.name {
-            coin.coin = i.coin + (coin.gen - coin.iter);
+            coin.coin = match i.coin.checked_add(coin.gen - coin.iter) {
+                Some(c) => c,
+                None => {
+                    coin.idle += 1;
+                    0 // Todo fix this
+                }
+            };
             coin.iter = coin.gen;
         }
     }
@@ -141,19 +149,19 @@ fn print_generators(
 ) -> bool {
     let mut msg = "+++\n".to_string();
     let mut gens = generators.lock().unwrap().deref().clone();
-    gens.sort_by(|a, b| b.coin.cmp(&a.coin));
+    gens.sort_by(|a, b| a.coin.cmp(&b.coin));
 
     for g in gens {
         if g.name == coin.name {
             msg += &format!(
-                "Wallet 0x{:016x} coins: {}, level: {}, CPS: {} <= ***\n",
-                coin.name, coin.coin, coin.level, coin.cps,
+                "Wallet 0x{:016x} coins: 0x{:x}.{:08x}, level: {}, CPS: {} <= ***\n",
+                coin.name, coin.idle, coin.coin, coin.level, coin.cps,
             )
             .to_owned()
         } else {
             msg += &format!(
-                "Wallet 0x{:016x} coins: {}, CPS: {}\n",
-                g.name, g.coin, g.cps
+                "Wallet 0x{:016x} coins: 0x{:x}.{:08x}, CPS: {}\n",
+                g.name, g.idle, g.coin, g.cps
             )
             .to_owned()
         };
@@ -168,30 +176,25 @@ fn print_generators(
 fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     let mut rng = rand::thread_rng();
     let x: u16 = rng.gen();
+    let mut msg = "".to_string();
 
-    if x % 10000 == 0 {
-        if stream
-            .write_all("Congrats! You've leveled up!\n".as_bytes())
-            .is_err()
-        {
-            return false;
-        };
-        miner.level += 1;
+    if x % 40000 == 0 {
+        msg = "Oh no! You've lost a level!\n".to_string();
+        miner.level -= 1;
     } else if x % 1000 == 0 {
-        if stream
-            .write_all(
-                format!(
-                    "Congrats! You've won {} free idlecoins!\n",
-                    1 << (miner.level * 2)
-                )
-                .as_bytes(),
-            )
-            .is_err()
-        {
-            return false;
-        }
+        msg = "Congrats! You've leveled up!\n".to_string();
+        miner.level += 1;
+    } else if x % 100 == 0 {
+        msg = format!(
+            "Congrats! You've won {} free idlecoins!\n",
+            1 << (miner.level * 2)
+        );
         miner.gen += 1 << (miner.level * 2);
     }
+
+    if !msg.is_empty() && stream.write_all(msg.as_bytes()).is_err() {
+        return false;
+    };
     true
 }
 
@@ -205,7 +208,7 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
     miner.cps = 0;
 
     let mut inc = 1;
-    let mut pow = 1000;
+    let mut pow = 100;
 
     let mut update = Instant::now();
 
