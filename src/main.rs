@@ -25,6 +25,7 @@ struct Wallet {
     iter: u64,  // session iteration idlecoin
     gen: u64,   // generated idlecoin
     level: u64, // current level
+    cps: u64,   // coin-per-second
 }
 
 fn main() {
@@ -110,6 +111,7 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
         iter: 0,
         gen: 0,
         level: 0,
+        cps: 0,
     })
     // Unlock generators
 }
@@ -144,12 +146,16 @@ fn print_generators(
     for g in gens {
         if g.name == coin.name {
             msg += &format!(
-                "Wallet 0x{:016x} coins: {}, level: {} <= ***\n",
-                coin.name, coin.coin, coin.level,
+                "Wallet 0x{:016x} coins: {}, level: {}, CPS: {} <= ***\n",
+                coin.name, coin.coin, coin.level, coin.cps,
             )
             .to_owned()
         } else {
-            msg += &format!("Wallet 0x{:016x} coins: {}\n", g.name, g.coin,).to_owned()
+            msg += &format!(
+                "Wallet 0x{:016x} coins: {}, CPS: {}\n",
+                g.name, g.coin, g.cps
+            )
+            .to_owned()
         };
     }
     if stream.write_all(msg.as_bytes()).is_err() {
@@ -163,7 +169,7 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     let mut rng = rand::thread_rng();
     let x: u16 = rng.gen();
 
-    if x % 1000 == 0 {
+    if x % 10000 == 0 {
         if stream
             .write_all("Congrats! You've leveled up!\n".as_bytes())
             .is_err()
@@ -171,15 +177,20 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
             return false;
         };
         miner.level += 1;
-    }
-    if x % 100 == 0 {
+    } else if x % 1000 == 0 {
         if stream
-            .write_all("Congrats! You've won 100 free idlecoins!\n".as_bytes())
+            .write_all(
+                format!(
+                    "Congrats! You've won {} free idlecoins!\n",
+                    1 << (miner.level * 2)
+                )
+                .as_bytes(),
+            )
             .is_err()
         {
             return false;
         }
-        miner.gen += 100;
+        miner.gen += 1 << (miner.level * 2);
     }
     true
 }
@@ -191,9 +202,10 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
     miner.gen = 1;
     miner.iter = 0;
     miner.level = 1;
+    miner.cps = 0;
 
     let mut inc = 1;
-    let mut pow = 10;
+    let mut pow = 1000;
 
     let mut update = Instant::now();
 
@@ -201,6 +213,7 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
     loop {
         // Increment coins
         miner.gen += inc;
+        miner.cps += inc;
 
         if !action(&stream, &mut miner) {
             break;
@@ -211,7 +224,7 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
         // Level up
         if miner.gen > pow {
             miner.level += 1;
-            inc = 1 << miner.level;
+            inc += 1 << miner.level;
             pow *= 10;
         }
 
@@ -220,9 +233,11 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
             if !print_generators(&stream, &miner, &generators) {
                 break;
             }
+            miner.cps = 0;
             update = Instant::now();
         }
 
+        inc += 1;
         // Rest from all that work
         sleep(Duration::from_millis(100));
     }
