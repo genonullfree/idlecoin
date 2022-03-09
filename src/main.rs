@@ -100,7 +100,7 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Lock generators
     let gens = generators.lock().unwrap();
 
-    println!("New user joined: 0x{:08x}", name);
+    println!("User joined: 0x{:08x}", name);
     // Look for user record
     for i in gens.deref() {
         if name == i.name {
@@ -155,18 +155,24 @@ fn print_generators(
     let mut msg = "+++\n".to_string();
     let mut gens = generators.lock().unwrap().deref().clone();
     gens.sort_by(|a, b| a.coin.cmp(&b.coin));
+    gens.sort_by(|a, b| a.idle.cmp(&b.idle));
 
-    for g in gens {
+    for (i, g) in gens.iter().enumerate() {
         if g.name == coin.name {
-            msg += &format!(
-                "Wallet 0x{:016x} coins: 0x{:x}.{:08x}, level: {}, CPS: {} <= ***\n",
-                coin.name, coin.idle, coin.coin, coin.level, coin.cps,
+            msg +=
+                &format!(
+                "[{:03}] Wallet 0x{:016x} Supercoins:Idlecoins {}:{}, CPS: {}, level: {} <= ***\n",
+                gens.len() - i, coin.name, coin.idle, coin.coin, coin.cps, coin.level,
             )
-            .to_owned()
+                .to_owned()
         } else {
             msg += &format!(
-                "Wallet 0x{:016x} coins: 0x{:x}.{:08x}, CPS: {}\n",
-                g.name, g.idle, g.coin, g.cps
+                "[{:03}] Wallet 0x{:016x} Supercoins:Idlecoins {}:{}, CPS: {}\n",
+                gens.len() - i,
+                g.name,
+                g.idle,
+                g.coin,
+                g.cps
             )
             .to_owned()
         };
@@ -206,7 +212,7 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
 fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
     // Allow user session to login
     let mut miner = login(&stream, &generators)?;
-    //let initcoin = gen.coin;
+
     miner.gen = 1;
     miner.iter = 0;
     miner.level = 1;
