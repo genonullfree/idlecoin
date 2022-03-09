@@ -134,7 +134,6 @@ fn update_generator(
     }
     gens.retain(|x| x.id != coin.id);
     gens.push(*coin);
-    drop(gens);
 
     Ok(())
 }
