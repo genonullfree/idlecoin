@@ -20,11 +20,11 @@ const SAVE: &str = ".idlecoin";
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 struct Wallet {
-    id: u64,    // hash of id / wallet address
-    idle: u64,  // total idlecoin
-    coin: u64,  // decimal idlecoin
-    level: u64, // current level
-    cps: u64,   // coin-per-second
+    id: u64,        // hash of id / wallet address
+    supercoin: u64, // total idlecoin
+    idlecoin: u64,  // decimal idlecoin
+    level: u64,     // current level
+    cps: u64,       // coin-per-second
 }
 
 fn main() {
@@ -70,11 +70,11 @@ fn main() {
         // Handle connection in new thread
         let generators_close = Arc::clone(&generators);
         thread::spawn(move || {
-            match session(&s, generators_close) {
-                Ok(_) => (),
-                Err(s) => println!("Err: {}", s),
+            let output = match session(&s, generators_close) {
+                Ok(m) => format!("User logged out: 0x{:0x}", m.id),
+                Err(s) => format!("Error: {}", s),
             };
-            println!("Connection closed: {:?}", s);
+            println!("Connection closed: {:?}, {}", s, output);
         });
     }
 }
@@ -110,8 +110,8 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Create new record
     Ok(Wallet {
         id,
-        idle: 0,
-        coin: 0,
+        supercoin: 0,
+        idlecoin: 0,
         level: 0,
         cps: 0,
     })
@@ -125,11 +125,11 @@ fn update_generator(
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
         if i.id == coin.id {
-            coin.coin = match i.coin.checked_add(coin.cps) {
+            coin.idlecoin = match i.idlecoin.checked_add(coin.cps) {
                 Some(c) => c,
                 None => {
-                    coin.idle += 1;
-                    let x: u128 = (i.coin as u128 + coin.cps as u128) % u64::MAX as u128;
+                    coin.supercoin += 1;
+                    let x: u128 = (i.idlecoin as u128 + coin.cps as u128) % u64::MAX as u128;
                     x as u64
                 }
             };
@@ -149,15 +149,15 @@ fn print_generators(
 ) -> bool {
     let mut msg = "+++\n".to_string();
     let mut gens = generators.lock().unwrap().deref().clone();
-    gens.sort_by(|a, b| a.coin.cmp(&b.coin));
-    gens.sort_by(|a, b| a.idle.cmp(&b.idle));
+    gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
+    gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
     for (i, g) in gens.iter().enumerate() {
         if g.id == coin.id {
             msg +=
                 &format!(
                 "[{:03}] Wallet 0x{:016x} Supercoins:Idlecoins {}:{}, CPS: {}, level: {} <= ***\n",
-                gens.len() - i, coin.id, coin.idle, coin.coin, coin.cps, coin.level,
+                gens.len() - i, coin.id, coin.supercoin, coin.idlecoin, coin.cps, coin.level,
             )
                 .to_owned()
         } else {
@@ -165,8 +165,8 @@ fn print_generators(
                 "[{:03}] Wallet 0x{:016x} Supercoins:Idlecoins {}:{}, CPS: {}\n",
                 gens.len() - i,
                 g.id,
-                g.idle,
-                g.coin,
+                g.supercoin,
+                g.idlecoin,
                 g.cps
             )
             .to_owned()
@@ -211,7 +211,7 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     true
 }
 
-fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
+fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Allow user session to login
     let mut miner = login(stream, &generators)?;
 
@@ -272,7 +272,7 @@ fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<()
 
     update_generator(&generators, &mut miner)?;
 
-    Ok(())
+    Ok(miner)
 }
 
 fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
