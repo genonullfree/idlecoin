@@ -62,7 +62,7 @@ fn main() {
     for stream in listener.incoming() {
         let s = match stream {
             Ok(s) => s,
-            _ => continue,
+            Err(_) => continue,
         };
 
         println!("Connection opened: {:?}", s);
