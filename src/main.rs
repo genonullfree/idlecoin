@@ -67,6 +67,8 @@ fn main() {
             _ => continue,
         };
 
+        println!("Connection from: {:?}", s);
+
         // Handle connection in new thread
         let generators_close = Arc::clone(&generators);
         thread::spawn(move || {
@@ -79,25 +81,26 @@ fn main() {
 }
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
-    // Lock generators
-    let gens = generators.lock().unwrap();
-
     // Request username
-    let msg = format!(
-        "Welcome to Idlecoin! There are {} current users.\nPlease enter your account: ",
-        gens.len()
-    );
+    let msg = "Welcome to Idlecoin!\nPlease enter your account: ".to_string();
     stream.write_all(msg.as_bytes())?;
 
     // Read username
     let mut name_raw: [u8; 1024] = [0; 1024];
-    let _ = stream.read(&mut name_raw[..]).unwrap();
+    let _ = match stream.read(&mut name_raw[..]) {
+        Ok(_) => (),
+        Err(s) => return Err(s),
+    };
 
     // Calculate the hash of the username
     let mut hash = xxh3::Xxh3::new();
     hash.write(&name_raw);
     let name = hash.finish();
 
+    // Lock generators
+    let gens = generators.lock().unwrap();
+
+    println!("New user joined: 0x{:08x}", name);
     // Look for user record
     for i in gens.deref() {
         if name == i.name {
@@ -244,7 +247,7 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
 
         inc += 1;
         // Rest from all that work
-        sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(500));
     }
 
     update_generator(&generators, &mut miner)?;
@@ -294,8 +297,7 @@ fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
     let j = serde_json::to_string(&gens.deref()).unwrap();
 
     // Open the stats file for writing
-    let mut file: File;
-    file = match File::create(&SAVE) {
+    let mut file = match File::create(&SAVE) {
         Ok(f) => f,
         Err(_) => {
             println!("Error opening {} for writing!", SAVE);
