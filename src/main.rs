@@ -62,7 +62,7 @@ fn main() {
     for stream in listener.incoming() {
         let s = match stream {
             Ok(s) => s,
-            _ => continue,
+            Err(_) => continue,
         };
 
         println!("Connection opened: {:?}", s);
@@ -126,7 +126,8 @@ fn update_generator(
                 Some(c) => c,
                 None => {
                     coin.supercoin += 1;
-                    let x: u128 = (i.idlecoin as u128 + coin.cps as u128) % u64::MAX as u128;
+                    let x: u128 =
+                        (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
                     x as u64
                 }
             };
@@ -134,7 +135,6 @@ fn update_generator(
     }
     gens.retain(|x| x.id != coin.id);
     gens.push(*coin);
-    drop(gens);
 
     Ok(())
 }
@@ -297,18 +297,14 @@ fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
 
     // Attempt to deserialize the json file data
     println!("Loading stats...");
-    let mut c: Vec<Wallet> = serde_json::from_str(&j).unwrap();
-    if c.is_empty() {
+    if let Ok(mut wallet) = serde_json::from_str(&j) {
+        // Update the generators struct
+        let mut gens = generators.lock().unwrap();
+        gens.append(&mut wallet);
+        println!("Successfully loaded stats file {}", SAVE);
+    } else {
         println!("Failed to load {}", SAVE);
-        return;
     }
-
-    // Update the generators struct
-    let mut gens = generators.lock().unwrap();
-    gens.append(&mut c);
-    drop(gens);
-
-    println!("Successfully loaded stats file {}", SAVE);
 }
 
 fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
