@@ -297,18 +297,14 @@ fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
 
     // Attempt to deserialize the json file data
     println!("Loading stats...");
-    let mut c: Vec<Wallet> = serde_json::from_str(&j).unwrap();
-    if c.is_empty() {
+    if let Ok(mut wallet) = serde_json::from_str(&j) {
+        // Update the generators struct
+        let mut gens = generators.lock().unwrap();
+        gens.append(&mut wallet);
+        println!("Successfully loaded stats file {}", SAVE);
+    } else {
         println!("Failed to load {}", SAVE);
-        return;
     }
-
-    // Update the generators struct
-    let mut gens = generators.lock().unwrap();
-    gens.append(&mut c);
-    drop(gens);
-
-    println!("Successfully loaded stats file {}", SAVE);
 }
 
 fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
