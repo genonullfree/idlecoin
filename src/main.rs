@@ -126,7 +126,8 @@ fn update_generator(
                 Some(c) => c,
                 None => {
                     coin.supercoin += 1;
-                    let x: u128 = (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
+                    let x: u128 =
+                        (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
                     x as u64
                 }
             };
