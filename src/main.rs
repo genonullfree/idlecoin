@@ -20,13 +20,11 @@ const SAVE: &str = ".idlecoin";
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 struct Wallet {
-    name: u64,  // hash of name / wallet address
-    idle: u64,  // total idlecoin
-    coin: u64,  // decimal idlecoin
-    iter: u64,  // session iteration idlecoin
-    gen: u64,   // generated idlecoin
-    level: u64, // current level
-    cps: u64,   // coin-per-second
+    id: u64,        // hash of id / wallet address
+    supercoin: u64, // total idlecoin
+    idlecoin: u64,  // decimal idlecoin
+    level: u64,     // current level
+    cps: u64,       // coin-per-second
 }
 
 fn main() {
@@ -67,51 +65,50 @@ fn main() {
             _ => continue,
         };
 
+        println!("Connection opened: {:?}", s);
+
         // Handle connection in new thread
         let generators_close = Arc::clone(&generators);
         thread::spawn(move || {
-            match session(s, generators_close) {
-                Ok(_) => (),
-                Err(s) => println!("Err: {}", s),
+            let output = match session(&s, generators_close) {
+                Ok(m) => format!("User logged out: 0x{:0x}", m.id),
+                Err(s) => format!("Error: {}", s),
             };
+            println!("Connection closed: {:?}, {}", s, output);
         });
     }
 }
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
+    // Request userid
+    let msg = "Welcome to Idlecoin!\nPlease enter your account: ".to_string();
+    stream.write_all(msg.as_bytes())?;
+
+    // Read userid
+    let mut id_raw: [u8; 1024] = [0; 1024];
+    let _ = stream.read(&mut id_raw[..])?;
+
+    // Calculate the hash of the userid
+    let mut hash = xxh3::Xxh3::new();
+    hash.write(&id_raw);
+    let id = hash.finish();
+
     // Lock generators
     let gens = generators.lock().unwrap();
 
-    // Request username
-    let msg = format!(
-        "Welcome to Idlecoin! There are {} current users.\nPlease enter your account: ",
-        gens.len()
-    );
-    stream.write_all(msg.as_bytes())?;
-
-    // Read username
-    let mut name_raw: [u8; 1024] = [0; 1024];
-    let _ = stream.read(&mut name_raw[..]).unwrap();
-
-    // Calculate the hash of the username
-    let mut hash = xxh3::Xxh3::new();
-    hash.write(&name_raw);
-    let name = hash.finish();
-
+    println!("User joined: 0x{:08x}", id);
     // Look for user record
     for i in gens.deref() {
-        if name == i.name {
+        if id == i.id {
             return Ok(*i);
         }
     }
 
     // Create new record
     Ok(Wallet {
-        name,
-        idle: 0,
-        coin: 0,
-        iter: 0,
-        gen: 0,
+        id,
+        supercoin: 0,
+        idlecoin: 0,
         level: 0,
         cps: 0,
     })
@@ -124,20 +121,18 @@ fn update_generator(
 ) -> Result<(), Error> {
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
-        if i.name == coin.name {
-            coin.coin = match i.coin.checked_add(coin.gen - coin.iter) {
+        if i.id == coin.id {
+            coin.idlecoin = match i.idlecoin.checked_add(coin.cps) {
                 Some(c) => c,
                 None => {
-                    coin.idle += 1;
-                    let x: u128 =
-                        (i.coin as u128 + (coin.gen - coin.iter) as u128) % u64::MAX as u128;
+                    coin.supercoin += 1;
+                    let x: u128 = (i.idlecoin as u128 + coin.cps as u128) % u64::MAX as u128;
                     x as u64
                 }
             };
-            coin.iter = coin.gen;
         }
     }
-    gens.retain(|x| x.name != coin.name);
+    gens.retain(|x| x.id != coin.id);
     gens.push(*coin);
     drop(gens);
 
@@ -151,19 +146,29 @@ fn print_generators(
 ) -> bool {
     let mut msg = "+++\n".to_string();
     let mut gens = generators.lock().unwrap().deref().clone();
-    gens.sort_by(|a, b| a.coin.cmp(&b.coin));
+    gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
+    gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
-    for g in gens {
-        if g.name == coin.name {
+    for (i, g) in gens.iter().enumerate() {
+        if g.id == coin.id {
             msg += &format!(
-                "Wallet 0x{:016x} coins: 0x{:x}.{:08x}, level: {}, CPS: {} <= ***\n",
-                coin.name, coin.idle, coin.coin, coin.level, coin.cps,
+                "[{:03}] Wallet 0x{:016x} Coins: {}:{}, CPS: {}, level: {} <= ***\n",
+                gens.len() - i,
+                coin.id,
+                coin.supercoin,
+                coin.idlecoin,
+                coin.cps,
+                coin.level,
             )
             .to_owned()
         } else {
             msg += &format!(
-                "Wallet 0x{:016x} coins: 0x{:x}.{:08x}, CPS: {}\n",
-                g.name, g.idle, g.coin, g.cps
+                "[{:03}] Wallet 0x{:016x} Coins: {}:{}, CPS: {}\n",
+                gens.len() - i,
+                g.id,
+                g.supercoin,
+                g.idlecoin,
+                g.cps
             )
             .to_owned()
         };
@@ -185,13 +190,20 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
         miner.level -= 1;
     } else if x % 1000 == 0 {
         msg = "Congrats! You've leveled up!\n".to_string();
-        miner.level += 1;
+        miner.level = match miner.level.checked_add(1) {
+            Some(n) => n,
+            None => u64::MAX,
+        };
     } else if x % 100 == 0 {
-        msg = format!(
-            "Congrats! You've won {} free idlecoins!\n",
-            1 << (miner.level * 3)
-        );
-        miner.gen += 1 << (miner.level * 3);
+        let prize = match miner.cps.checked_mul(10) {
+            Some(n) => n,
+            None => u64::MAX,
+        };
+        msg = format!("Congrats! You've won {} free idlecoins!\n", prize);
+        miner.cps = match miner.cps.checked_add(prize) {
+            Some(n) => n,
+            None => u64::MAX,
+        };
     }
 
     if !msg.is_empty() && stream.write_all(msg.as_bytes()).is_err() {
@@ -200,12 +212,10 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     true
 }
 
-fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
+fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Allow user session to login
-    let mut miner = login(&stream, &generators)?;
-    //let initcoin = gen.coin;
-    miner.gen = 1;
-    miner.iter = 0;
+    let mut miner = login(stream, &generators)?;
+
     miner.level = 1;
     miner.cps = 0;
 
@@ -217,39 +227,53 @@ fn session(stream: TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<(),
     // Main loop
     loop {
         // Increment coins
-        miner.gen += inc;
-        miner.cps += inc;
+        miner.cps = match miner.cps.checked_add(inc) {
+            Some(n) => n,
+            None => u64::MAX,
+        };
 
-        if !action(&stream, &mut miner) {
+        if !action(stream, &mut miner) {
             break;
         }
 
         update_generator(&generators, &mut miner)?;
 
         // Level up
-        if miner.gen > pow {
-            miner.level += 1;
-            inc += 1 << miner.level;
-            pow *= 10;
+        if miner.cps > pow {
+            miner.level = match miner.level.checked_add(1) {
+                Some(n) => n,
+                None => u64::MAX,
+            };
+            inc = match inc.checked_add(1 << miner.level) {
+                Some(n) => n,
+                None => u64::MAX,
+            };
+            pow = match pow.checked_mul(10) {
+                Some(n) => n,
+                None => u64::MAX,
+            };
         }
 
         // Print updates
         if update.elapsed().as_secs() >= 1 {
-            if !print_generators(&stream, &miner, &generators) {
+            if !print_generators(stream, &miner, &generators) {
                 break;
             }
-            miner.cps = 0;
+            //miner.cps = 0;
             update = Instant::now();
         }
 
-        inc += 1;
+        inc = match inc.checked_add(1) {
+            Some(n) => n,
+            None => u64::MAX,
+        };
         // Rest from all that work
-        sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(500));
     }
 
     update_generator(&generators, &mut miner)?;
 
-    Ok(())
+    Ok(miner)
 }
 
 fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
@@ -294,8 +318,7 @@ fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
     let j = serde_json::to_string(&gens.deref()).unwrap();
 
     // Open the stats file for writing
-    let mut file: File;
-    file = match File::create(&SAVE) {
+    let mut file = match File::create(&SAVE) {
         Ok(f) => f,
         Err(_) => {
             println!("Error opening {} for writing!", SAVE);
