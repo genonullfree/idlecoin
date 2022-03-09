@@ -86,10 +86,7 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
 
     // Read userid
     let mut id_raw: [u8; 1024] = [0; 1024];
-    let _ = match stream.read(&mut id_raw[..]) {
-        Ok(_) => (),
-        Err(s) => return Err(s),
-    };
+    let _ = stream.read(&mut id_raw[..])?;
 
     // Calculate the hash of the userid
     let mut hash = xxh3::Xxh3::new();
@@ -154,15 +151,19 @@ fn print_generators(
 
     for (i, g) in gens.iter().enumerate() {
         if g.id == coin.id {
-            msg +=
-                &format!(
-                "[{:03}] Wallet 0x{:016x} Supercoins:Idlecoins {}:{}, CPS: {}, level: {} <= ***\n",
-                gens.len() - i, coin.id, coin.supercoin, coin.idlecoin, coin.cps, coin.level,
+            msg += &format!(
+                "[{:03}] Wallet 0x{:016x} Coins: {}:{}, CPS: {}, level: {} <= ***\n",
+                gens.len() - i,
+                coin.id,
+                coin.supercoin,
+                coin.idlecoin,
+                coin.cps,
+                coin.level,
             )
-                .to_owned()
+            .to_owned()
         } else {
             msg += &format!(
-                "[{:03}] Wallet 0x{:016x} Supercoins:Idlecoins {}:{}, CPS: {}\n",
+                "[{:03}] Wallet 0x{:016x} Coins: {}:{}, CPS: {}\n",
                 gens.len() - i,
                 g.id,
                 g.supercoin,
