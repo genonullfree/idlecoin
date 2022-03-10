@@ -7,7 +7,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -190,25 +190,29 @@ fn print_generators(
 
 fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     let mut rng = rand::thread_rng();
-    let x: u16 = rng.gen();
+    let r: u16 = rng.gen();
+    let x: u16 = r % 1000;
     let mut msg = "".to_string();
 
-    if x % 40000 == 0 {
-        msg = "Oh no! You've lost a level!\n".to_string();
+    if x == 0 {
+        // 0.1 % chance
         miner.level -= 1;
-    } else if x % 1000 == 0 {
-        msg = "Congrats! You've leveled up!\n".to_string();
+        msg = "Oh no! You've lost a level!\n".to_string();
+    } else if x <= 5 {
+        // 0.5 % chance
         miner.level = match miner.level.checked_add(1) {
             Some(n) => n,
             None => u64::MAX,
         };
-    } else if x % 100 == 0 {
+        msg = "Congrats! You've leveled up!\n".to_string();
+    } else if x <= 15 {
+        // 1.0 % chance
         let prize = match miner.cps.checked_mul(10) {
             Some(n) => n,
             None => u64::MAX,
         };
         msg = format!("Congrats! You've won {} free idlecoins!\n", prize);
-        miner.cps = match miner.cps.checked_add(prize) {
+        miner.idlecoin = match miner.idlecoin.checked_add(prize) {
             Some(n) => n,
             None => u64::MAX,
         };
@@ -227,57 +231,56 @@ fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wa
     miner.level = 1;
     miner.cps = 0;
 
-    let mut inc = 1;
-    let mut pow = 100;
-
-    let mut update = Instant::now();
+    let mut inc: u64 = 1;
+    let mut pow: u64 = 10;
 
     // Main loop
     loop {
-        // Increment coins
-        miner.cps = match miner.cps.checked_add(inc) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
-
-        if !action(stream, &mut miner) {
-            break;
-        }
-
-        update_generator(&generators, &mut miner)?;
-
         // Level up
         if miner.cps > pow {
             miner.level = match miner.level.checked_add(1) {
                 Some(n) => n,
                 None => u64::MAX,
             };
-            inc = match inc.checked_add(1 << miner.level) {
+
+            inc = match inc.checked_add(miner.level) {
                 Some(n) => n,
                 None => u64::MAX,
             };
+
             pow = match pow.checked_mul(10) {
                 Some(n) => n,
                 None => u64::MAX,
             };
         }
 
-        // Print updates
-        if update.elapsed().as_secs() >= 1 {
-            if !print_generators(stream, &miner, &generators) {
-                break;
-            }
-            //miner.cps = 0;
-            update = Instant::now();
+        // Increment coins
+        if miner.cps != u64::MAX {
+            miner.cps = match miner.cps.checked_add(inc + miner.level) {
+                Some(n) => n,
+                None => u64::MAX,
+            };
         }
 
-        inc = match inc.checked_add(1) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
+        // Update stat struct
+        update_generator(&generators, &mut miner)?;
+
+        // Print updates
+        if !print_generators(stream, &miner, &generators) {
+            break;
+        }
+
+        // Perform action, maybe (randomly)
+        if !action(stream, &mut miner) {
+            break;
+        }
+
         // Rest from all that work
-        sleep(Duration::from_millis(500));
+        sleep(Duration::from_secs(1));
     }
+
+    // Show the miner is offline
+    miner.cps = 0;
 
     update_generator(&generators, &mut miner)?;
 
@@ -293,7 +296,7 @@ fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
         Err(_) => {
             println!("No stats file found.");
             return Ok(());
-        },
+        }
     };
 
     file.read_to_string(&mut j)?;
@@ -311,7 +314,10 @@ fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
         gens.append(&mut wallet);
         println!("Successfully loaded stats file {}", SAVE);
     } else {
-        return Err(Error::new(ErrorKind::InvalidData, format!("Failed to load {}", SAVE)));
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("Failed to load {}", SAVE),
+        ));
     }
 
     Ok(())
@@ -321,6 +327,7 @@ fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
     // Serialize the stats data to json
     println!("Saving stats...");
     let gens = generators.lock().unwrap();
+
     let j = serde_json::to_string(&gens.deref()).unwrap();
 
     // Open the stats file for writing
