@@ -17,6 +17,21 @@ use xxhash_rust::xxh3;
 
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
+const BANNER: &str = "
+Welcome to:
+
+d8b        888   888                                    d8b
+Y8P        888   888                                    Y8P
+           888   888
+888    .d88888   888    .d88b.     .d8888b    .d88b.    888   88888b.
+888   d88  888   888   d8P  Y8b   d88P       d88  88b   888   888  88b
+888   888  888   888   88888888   888        888  888   888   888  888
+888   Y88b 888   888   Y8b.       Y88b.      Y88..88P   888   888  888
+888     Y88888   888     Y8888      Y8888P     Y88P     888   888  888
+
+Source: https://github.com/genonullfree/idlecoin
+
+Please enter your username: ";
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 struct Wallet {
@@ -74,7 +89,7 @@ fn main() -> Result<(), Error> {
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Request userid
-    let msg = "Welcome to Idlecoin!\nPlease enter your account: ".to_string();
+    let msg = BANNER.to_string();
     stream.write_all(msg.as_bytes())?;
 
     // Read userid
