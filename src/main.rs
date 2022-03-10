@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -27,24 +27,15 @@ struct Wallet {
     cps: u64,       // coin-per-second
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     // Create global array of user generators
     let generators = Arc::new(Mutex::new(Vec::<Wallet>::new()));
 
     // Load previous stats file
-    load_stats(&generators);
+    load_stats(&generators)?;
 
     // Bind network listener to port
-    let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT))) {
-        Ok(l) => l,
-        Err(_) => {
-            println!(
-                "Cannot bind to port: {}. Is idlecoin already running?",
-                PORT
-            );
-            return;
-        }
-    };
+    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT)))?;
 
     let mut signals = Signals::new(&[SIGINT]).unwrap();
     let generators_save = Arc::clone(&generators);
@@ -77,6 +68,8 @@ fn main() {
             println!("Connection closed: {:?}, {}", s, output);
         });
     }
+
+    Ok(())
 }
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
@@ -276,23 +269,23 @@ fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wa
     Ok(miner)
 }
 
-fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
+fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
     let mut j = String::new();
 
     // Attempt to open and read the saved stats file
     let mut file = match File::open(&SAVE) {
         Ok(f) => f,
         Err(_) => {
-            println!("No previous stats file found");
-            return;
-        }
+            println!("No stats file found.");
+            return Ok(());
+        },
     };
-    file.read_to_string(&mut j).unwrap();
+
+    file.read_to_string(&mut j)?;
 
     // Exit if file is empty
     if j.is_empty() {
-        println!("No data to load");
-        return;
+        return Err(Error::new(ErrorKind::InvalidData, "No data to load"));
     }
 
     // Attempt to deserialize the json file data
@@ -303,8 +296,10 @@ fn load_stats(generators: &Arc<Mutex<Vec<Wallet>>>) {
         gens.append(&mut wallet);
         println!("Successfully loaded stats file {}", SAVE);
     } else {
-        println!("Failed to load {}", SAVE);
+        return Err(Error::new(ErrorKind::InvalidData, format!("Failed to load {}", SAVE)));
     }
+
+    Ok(())
 }
 
 fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
