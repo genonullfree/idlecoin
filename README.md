@@ -1,4 +1,13 @@
-# IDLECOIN
+```
+ /$$       /$$ /$$                               /$$
+|__/      | $$| $$                              |__/
+ /$$  /$$$$$$$| $$  /$$$$$$   /$$$$$$$  /$$$$$$  /$$ /$$$$$$$
+| $$ /$$__  $$| $$ /$$__  $$ /$$_____/ /$$__  $$| $$| $$__  $$
+| $$| $$  | $$| $$| $$$$$$$$| $$      | $$  \ $$| $$| $$  \ $$
+| $$| $$  | $$| $$| $$_____/| $$      | $$  | $$| $$| $$  | $$
+| $$|  $$$$$$$| $$|  $$$$$$$|  $$$$$$$|  $$$$$$/| $$| $$  | $$
+|__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
+```
 
 This is an idle game where the point is to open a netcat connection to the server and keep it open as long as possible. The longer the connection is active, the more powerful the `idlecoin` generator becomes.
 
