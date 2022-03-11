@@ -15,20 +15,22 @@ use signal_hook::{consts::SIGINT, iterator::Signals};
 use std::hash::Hasher;
 use xxhash_rust::xxh3;
 
+const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
+const IDLECOIN: &str = r"
+
+ /$$       /$$ /$$                               /$$
+|__/      | $$| $$                              |__/
+ /$$  /$$$$$$$| $$  /$$$$$$   /$$$$$$$  /$$$$$$  /$$ /$$$$$$$
+| $$ /$$__  $$| $$ /$$__  $$ /$$_____/ /$$__  $$| $$| $$__  $$
+| $$| $$  | $$| $$| $$$$$$$$| $$      | $$  \ $$| $$| $$  \ $$
+| $$| $$  | $$| $$| $$_____/| $$      | $$  | $$| $$| $$  | $$
+| $$|  $$$$$$$| $$|  $$$$$$$|  $$$$$$$|  $$$$$$/| $$| $$  | $$
+|__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
+
+";
 const BANNER: &str = "
-Welcome to:
-
-d8b        888   888                                    d8b
-Y8P        888   888                                    Y8P
-           888   888
-888    .d88888   888    .d88b.     .d8888b    .d88b.    888   88888b.
-888   d88  888   888   d8P  Y8b   d88P       d88  88b   888   888  88b
-888   888  888   888   88888888   888        888  888   888   888  888
-888   Y88b 888   888   Y8b.       Y88b.      Y88..88P   888   888  888
-888     Y88888   888     Y8888      Y8888P     Y88P     888   888  888
-
 Source: https://github.com/genonullfree/idlecoin
 
 Please enter your username: ";
@@ -71,16 +73,14 @@ fn main() -> Result<(), Error> {
             Err(_) => continue,
         };
 
-        println!("Connection opened: {:?}", s);
-
         // Handle connection in new thread
         let generators_close = Arc::clone(&generators);
         thread::spawn(move || {
             let output = match session(&s, generators_close) {
-                Ok(m) => format!("User logged out: 0x{:0x}", m.id),
+                Ok(m) => format!("0x{:0x}", m.id),
                 Err(s) => format!("Error: {}", s),
             };
-            println!("Connection closed: {:?}, {}", s, output);
+            println!("User-- {} from: {:?}", output, s);
         });
     }
 
@@ -89,7 +89,7 @@ fn main() -> Result<(), Error> {
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Request userid
-    let msg = BANNER.to_string();
+    let msg = format!("{}Welcome to{}{}", CLR, IDLECOIN, BANNER);
     stream.write_all(msg.as_bytes())?;
 
     // Read userid
@@ -104,7 +104,7 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Lock generators
     let gens = generators.lock().unwrap();
 
-    println!("User joined: 0x{:08x}", id);
+    println!("User++ 0x{:08x} from: {:?}", id, stream);
     // Look for user record
     for i in gens.deref() {
         if id == i.id {
@@ -130,15 +130,20 @@ fn update_generator(
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
         if i.id == coin.id {
-            coin.idlecoin = match i.idlecoin.checked_add(coin.cps) {
-                Some(c) => c,
-                None => {
-                    coin.supercoin += 1;
-                    let x: u128 =
-                        (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
-                    x as u64
-                }
-            };
+            if coin.cps == u64::MAX {
+                // Supercharged mode!!!
+                coin.supercoin += coin.level;
+            } else {
+                coin.idlecoin = match i.idlecoin.checked_add(coin.cps) {
+                    Some(c) => c,
+                    None => {
+                        coin.supercoin += 1;
+                        let x: u128 =
+                            (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
+                        x as u64
+                    }
+                };
+            }
         }
     }
     gens.retain(|x| x.id != coin.id);
@@ -152,12 +157,20 @@ fn print_generators(
     coin: &Wallet,
     generators: &Arc<Mutex<Vec<Wallet>>>,
 ) -> bool {
-    let mut msg = "+++\n".to_string();
+    let mut msg = format!("{}{}", CLR, IDLECOIN);
     let mut gens = generators.lock().unwrap().deref().clone();
+    let mut ignore = true;
+
     gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
     for (i, g) in gens.iter().enumerate() {
+        // Ignore all 0-cps before the first live miner
+        if ignore && g.cps == 0 {
+            continue;
+        }
+        ignore = false;
+
         if g.id == coin.id {
             msg += &format!(
                 "[{:03}] Wallet 0x{:016x} Coins: {}:{}, CPS: {}, level: {} <= ***\n",
@@ -228,7 +241,7 @@ fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wa
     // Allow user session to login
     let mut miner = login(stream, &generators)?;
 
-    miner.level = 1;
+    miner.level = 0;
     miner.cps = 0;
 
     let mut inc: u64 = 1;
@@ -328,7 +341,7 @@ fn save_stats(generators: Arc<Mutex<Vec<Wallet>>>) {
     println!("Saving stats...");
     let gens = generators.lock().unwrap();
 
-    let j = serde_json::to_string(&gens.deref()).unwrap();
+    let j = serde_json::to_string_pretty(&gens.deref()).unwrap();
 
     // Open the stats file for writing
     let mut file = match File::create(&SAVE) {

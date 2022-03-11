@@ -1,4 +1,13 @@
-# IDLECOIN
+```
+ /$$       /$$ /$$                               /$$
+|__/      | $$| $$                              |__/
+ /$$  /$$$$$$$| $$  /$$$$$$   /$$$$$$$  /$$$$$$  /$$ /$$$$$$$
+| $$ /$$__  $$| $$ /$$__  $$ /$$_____/ /$$__  $$| $$| $$__  $$
+| $$| $$  | $$| $$| $$$$$$$$| $$      | $$  \ $$| $$| $$  \ $$
+| $$| $$  | $$| $$| $$_____/| $$      | $$  | $$| $$| $$  | $$
+| $$|  $$$$$$$| $$|  $$$$$$$|  $$$$$$$|  $$$$$$/| $$| $$  | $$
+|__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
+```
 
 This is an idle game where the point is to open a netcat connection to the server and keep it open as long as possible. The longer the connection is active, the more powerful the `idlecoin` generator becomes.
 
@@ -35,3 +44,20 @@ Rank number
 
 * `+++`: The delimiter between updates
 * `***`: The current miner marker
+
+## Auto-Login
+
+To setup your terminal to auto-login in case the connection with the server is interrupted (say, because the alpha software crashed or the server is being upgraded to a new version) you can use the following bash command, substituting your info for `<USER>`, `<SERVER>`, and `<PORT>`:
+```bash
+while true; do echo <USER> |nc <SERVER> <PORT>; done
+```
+
+When that happens the miner level and CPS will be reset to 0, just like starting a new connection.
+
+## Random Events
+
+There are several random events that can happen:
+
+1. Gain 10x CPS coins -- 1.0% chance
+1. Gain 1 Level -- 0.5% chance
+1. Lose 1 Level -- 0.1% chance
