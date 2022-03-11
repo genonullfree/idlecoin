@@ -209,8 +209,13 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
 
     if x == 0 {
         // 0.1 % chance
-        miner.level -= 1;
-        msg = "Oh no! You've lost a level!\n".to_string();
+        miner.level = match miner.level.checked_sub(1) {
+            Some(n) => {
+                msg = "Oh no! You've lost a level!\n".to_string();
+                n
+            }
+            None => 0,
+        };
     } else if x <= 5 {
         // 0.5 % chance
         miner.level = match miner.level.checked_add(1) {
