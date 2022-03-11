@@ -17,17 +17,17 @@ use xxhash_rust::xxh3;
 
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
-const BANNER: &str = "
+const BANNER: &str = r"
 Welcome to:
 
-d8b        888   888                                    d8b
-Y8P        888   888                                    Y8P
-           888   888
-888    .d88888   888    .d88b.     .d8888b    .d88b.    888   88888b.
-888   d88  888   888   d8P  Y8b   d88P       d88  88b   888   888  88b
-888   888  888   888   88888888   888        888  888   888   888  888
-888   Y88b 888   888   Y8b.       Y88b.      Y88..88P   888   888  888
-888     Y88888   888     Y8888      Y8888P     Y88P     888   888  888
+ /$$       /$$ /$$                               /$$
+|__/      | $$| $$                              |__/
+ /$$  /$$$$$$$| $$  /$$$$$$   /$$$$$$$  /$$$$$$  /$$ /$$$$$$$
+| $$ /$$__  $$| $$ /$$__  $$ /$$_____/ /$$__  $$| $$| $$__  $$
+| $$| $$  | $$| $$| $$$$$$$$| $$      | $$  \ $$| $$| $$  \ $$
+| $$| $$  | $$| $$| $$_____/| $$      | $$  | $$| $$| $$  | $$
+| $$|  $$$$$$$| $$|  $$$$$$$|  $$$$$$$|  $$$$$$/| $$| $$  | $$
+|__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
 
 Source: https://github.com/genonullfree/idlecoin
 
@@ -71,16 +71,14 @@ fn main() -> Result<(), Error> {
             Err(_) => continue,
         };
 
-        println!("Connection opened: {:?}", s);
-
         // Handle connection in new thread
         let generators_close = Arc::clone(&generators);
         thread::spawn(move || {
             let output = match session(&s, generators_close) {
-                Ok(m) => format!("User logged out: 0x{:0x}", m.id),
+                Ok(m) => format!("0x{:0x}", m.id),
                 Err(s) => format!("Error: {}", s),
             };
-            println!("Connection closed: {:?}, {}", s, output);
+            println!("User-- {} from: {:?}", output, s);
         });
     }
 
@@ -104,7 +102,7 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Lock generators
     let gens = generators.lock().unwrap();
 
-    println!("User joined: 0x{:08x}", id);
+    println!("User++ 0x{:08x} from: {:?}", id, stream);
     // Look for user record
     for i in gens.deref() {
         if id == i.id {
@@ -152,7 +150,7 @@ fn print_generators(
     coin: &Wallet,
     generators: &Arc<Mutex<Vec<Wallet>>>,
 ) -> bool {
-    let mut msg = "+++\n".to_string();
+    let mut msg = "\x1b[2J\x1b[;H".to_string();
     let mut gens = generators.lock().unwrap().deref().clone();
     gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
