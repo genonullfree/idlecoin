@@ -219,10 +219,12 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
     } else if x <= 5 {
         // 0.5 % chance
         miner.level = match miner.level.checked_add(1) {
-            Some(n) => n,
+            Some(n) => {
+                msg = "Congrats! You've leveled up!\n".to_string();
+                n
+            }
             None => u64::MAX,
         };
-        msg = "Congrats! You've leveled up!\n".to_string();
     } else if x <= 15 {
         // 1.0 % chance
         let prize = match miner.cps.checked_mul(10) {
