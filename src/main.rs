@@ -152,10 +152,18 @@ fn print_generators(
 ) -> bool {
     let mut msg = "\x1b[2J\x1b[;H".to_string();
     let mut gens = generators.lock().unwrap().deref().clone();
+    let mut ignore = true;
+
     gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
     for (i, g) in gens.iter().enumerate() {
+        // Ignore all 0-cps before the first live miner
+        if ignore && g.cps == 0 {
+            continue;
+        }
+        ignore = false;
+
         if g.id == coin.id {
             msg += &format!(
                 "[{:03}] Wallet 0x{:016x} Coins: {}:{}, CPS: {}, level: {} <= ***\n",
