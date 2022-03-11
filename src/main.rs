@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::hash::Hasher;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
@@ -12,9 +13,9 @@ use std::time::Duration;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use signal_hook::{consts::SIGINT, iterator::Signals};
-use std::hash::Hasher;
 use xxhash_rust::xxh3;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
@@ -28,7 +29,6 @@ const IDLECOIN: &str = r"
 | $$| $$  | $$| $$| $$_____/| $$      | $$  | $$| $$| $$  | $$
 | $$|  $$$$$$$| $$|  $$$$$$$|  $$$$$$$|  $$$$$$/| $$| $$  | $$
 |__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
-
 ";
 const BANNER: &str = "
 Source: https://github.com/genonullfree/idlecoin
@@ -89,7 +89,7 @@ fn main() -> Result<(), Error> {
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Request userid
-    let msg = format!("{}Welcome to{}{}", CLR, IDLECOIN, BANNER);
+    let msg = format!("{}Welcome to{}v{}\n\n{}", CLR, IDLECOIN, VERSION, BANNER);
     stream.write_all(msg.as_bytes())?;
 
     // Read userid
@@ -157,7 +157,7 @@ fn print_generators(
     coin: &Wallet,
     generators: &Arc<Mutex<Vec<Wallet>>>,
 ) -> bool {
-    let mut msg = format!("{}{}", CLR, IDLECOIN);
+    let mut msg = format!("{}{}v{}\n\n", CLR, IDLECOIN, VERSION);
     let mut gens = generators.lock().unwrap().deref().clone();
     let mut ignore = true;
 
