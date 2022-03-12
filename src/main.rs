@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::hash::Hasher;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
@@ -12,9 +13,9 @@ use std::time::Duration;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use signal_hook::{consts::SIGINT, iterator::Signals};
-use std::hash::Hasher;
 use xxhash_rust::xxh3;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
@@ -28,7 +29,6 @@ const IDLECOIN: &str = r"
 | $$| $$  | $$| $$| $$_____/| $$      | $$  | $$| $$| $$  | $$
 | $$|  $$$$$$$| $$|  $$$$$$$|  $$$$$$$|  $$$$$$/| $$| $$  | $$
 |__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
-
 ";
 const BANNER: &str = "
 Source: https://github.com/genonullfree/idlecoin
@@ -89,7 +89,7 @@ fn main() -> Result<(), Error> {
 
 fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
     // Request userid
-    let msg = format!("{}Welcome to{}{}", CLR, IDLECOIN, BANNER);
+    let msg = format!("{}Welcome to{}v{}\n\n{}", CLR, IDLECOIN, VERSION, BANNER);
     stream.write_all(msg.as_bytes())?;
 
     // Read userid
@@ -123,27 +123,11 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Unlock generators
 }
 
-fn update_generator(
-    generators: &Arc<Mutex<Vec<Wallet>>>,
-    mut coin: &mut Wallet,
-) -> Result<(), Error> {
+fn update_generator(generators: &Arc<Mutex<Vec<Wallet>>>, coin: &mut Wallet) -> Result<(), Error> {
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
         if i.id == coin.id {
-            if coin.cps == u64::MAX {
-                // Supercharged mode!!!
-                coin.supercoin += coin.level;
-            } else {
-                coin.idlecoin = match i.idlecoin.checked_add(coin.cps) {
-                    Some(c) => c,
-                    None => {
-                        coin.supercoin += 1;
-                        let x: u128 =
-                            (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
-                        x as u64
-                    }
-                };
-            }
+            add_idlecoins(coin, coin.cps);
         }
     }
     gens.retain(|x| x.id != coin.id);
@@ -157,7 +141,7 @@ fn print_generators(
     coin: &Wallet,
     generators: &Arc<Mutex<Vec<Wallet>>>,
 ) -> bool {
-    let mut msg = format!("{}{}", CLR, IDLECOIN);
+    let mut msg = format!("{}{}v{}\n\n", CLR, IDLECOIN, VERSION);
     let mut gens = generators.lock().unwrap().deref().clone();
     let mut ignore = true;
 
@@ -209,15 +193,22 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
 
     if x == 0 {
         // 0.1 % chance
-        miner.level -= 1;
-        msg = "Oh no! You've lost a level!\n".to_string();
+        miner.level = match miner.level.checked_sub(1) {
+            Some(n) => {
+                msg = "Oh no! You've lost a level!\n".to_string();
+                n
+            }
+            None => 0,
+        };
     } else if x <= 5 {
         // 0.5 % chance
         miner.level = match miner.level.checked_add(1) {
-            Some(n) => n,
+            Some(n) => {
+                msg = "Congrats! You've leveled up!\n".to_string();
+                n
+            }
             None => u64::MAX,
         };
-        msg = "Congrats! You've leveled up!\n".to_string();
     } else if x <= 15 {
         // 1.0 % chance
         let prize = match miner.cps.checked_mul(10) {
@@ -225,16 +216,35 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
             None => u64::MAX,
         };
         msg = format!("Congrats! You've won {} free idlecoins!\n", prize);
-        miner.idlecoin = match miner.idlecoin.checked_add(prize) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
+        add_idlecoins(miner, prize);
     }
 
     if !msg.is_empty() && stream.write_all(msg.as_bytes()).is_err() {
         return false;
     };
     true
+}
+
+fn add_idlecoins(mut miner: &mut Wallet, new: u64) {
+    if new == u64::MAX {
+        // Supercharged mode!!!
+        miner.supercoin = match miner.supercoin.checked_add(miner.level) {
+            Some(s) => s,
+            None => u64::MAX,
+        };
+    } else {
+        miner.idlecoin = match miner.idlecoin.checked_add(new) {
+            Some(c) => c,
+            None => {
+                miner.supercoin = match miner.supercoin.checked_add(1) {
+                    Some(s) => s,
+                    None => u64::MAX,
+                };
+                let x: u128 = (u128::from(miner.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
+                x as u64
+            }
+        };
+    }
 }
 
 fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
