@@ -123,27 +123,11 @@ fn login(mut stream: &TcpStream, generators: &Arc<Mutex<Vec<Wallet>>>) -> Result
     // Unlock generators
 }
 
-fn update_generator(
-    generators: &Arc<Mutex<Vec<Wallet>>>,
-    mut coin: &mut Wallet,
-) -> Result<(), Error> {
+fn update_generator(generators: &Arc<Mutex<Vec<Wallet>>>, coin: &mut Wallet) -> Result<(), Error> {
     let mut gens = generators.lock().unwrap();
     for i in gens.deref() {
         if i.id == coin.id {
-            if coin.cps == u64::MAX {
-                // Supercharged mode!!!
-                coin.supercoin += coin.level;
-            } else {
-                coin.idlecoin = match i.idlecoin.checked_add(coin.cps) {
-                    Some(c) => c,
-                    None => {
-                        coin.supercoin += 1;
-                        let x: u128 =
-                            (u128::from(i.idlecoin) + u128::from(coin.cps)) % u128::from(u64::MAX);
-                        x as u64
-                    }
-                };
-            }
+            add_idlecoins(coin, coin.cps);
         }
     }
     gens.retain(|x| x.id != coin.id);
@@ -232,16 +216,35 @@ fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
             None => u64::MAX,
         };
         msg = format!("Congrats! You've won {} free idlecoins!\n", prize);
-        miner.idlecoin = match miner.idlecoin.checked_add(prize) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
+        add_idlecoins(miner, prize);
     }
 
     if !msg.is_empty() && stream.write_all(msg.as_bytes()).is_err() {
         return false;
     };
     true
+}
+
+fn add_idlecoins(mut miner: &mut Wallet, new: u64) {
+    if new == u64::MAX {
+        // Supercharged mode!!!
+        miner.supercoin = match miner.supercoin.checked_add(miner.level) {
+            Some(s) => s,
+            None => u64::MAX,
+        };
+    } else {
+        miner.idlecoin = match miner.idlecoin.checked_add(new) {
+            Some(c) => c,
+            None => {
+                miner.supercoin = match miner.supercoin.checked_add(1) {
+                    Some(s) => s,
+                    None => u64::MAX,
+                };
+                let x: u128 = (u128::from(miner.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
+                x as u64
+            }
+        };
+    }
 }
 
 fn session(stream: &TcpStream, generators: Arc<Mutex<Vec<Wallet>>>) -> Result<Wallet, Error> {
