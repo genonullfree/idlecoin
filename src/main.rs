@@ -45,7 +45,7 @@ struct Wallet {
 
 #[derive(Copy, Clone, Debug)]
 struct Miner {
-    miner_id: u64,  // miner address ID
+    miner_id: u32,  // miner address ID
     wallet_id: u64, // wallet address ID
     level: u64,     // current level
     cps: u64,       // coin-per-second
@@ -201,10 +201,10 @@ fn login(
 
     // Generate a random miner_id
     let mut rng = rand::thread_rng();
-    let miner_id: u64 = rng.gen();
+    let miner_id: u32 = rng.gen();
 
     println!(
-        "User++ U:0x{:016x} M:0x{:016x} from: {:?}",
+        "User++ U:0x{:016x} M:0x{:08x} from: {:?}",
         wallet_id, miner_id, stream
     );
 
@@ -242,7 +242,7 @@ fn print_wallets(
         for c in cons.iter() {
             if c.miner.wallet_id == g.id {
                 msg += &format!(
-                    "    [+] Miner 0x{:016x} Cps: {} Level: {}\n",
+                    "    [+] Miner 0x{:08x} Cps: {} Level: {}\n",
                     c.miner.miner_id, c.miner.cps, c.miner.level,
                 )
                 .to_owned();
@@ -280,7 +280,7 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
             // If error, mark miner for disconnection
             rem.push(i);
             println!(
-                "User-- U:0x{:016x} M:0x{:016x} from: {:?}",
+                "User-- U:0x{:016x} M:0x{:08x} from: {:?}",
                 c.miner.wallet_id, c.miner.miner_id, c.stream
             );
         }
@@ -307,7 +307,7 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
                 Some(n) => {
                     msg.insert(
                         0,
-                        format!(" [!] Miner 0x{:016x} lost a level\n", c.miner.miner_id),
+                        format!(" [!] Miner 0x{:08x} lost a level\n", c.miner.miner_id),
                     );
                     n
                 }
@@ -319,7 +319,7 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
                 Some(n) => {
                     msg.insert(
                         0,
-                        format!(" [!] Miner 0x{:016x} leveled up\n", c.miner.miner_id),
+                        format!(" [!] Miner 0x{:08x} leveled up\n", c.miner.miner_id),
                     );
                     n
                 }
@@ -334,7 +334,7 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
             msg.insert(
                 0,
                 format!(
-                    " [!] Miner 0x{:016x} gained 50% CPS boost\n",
+                    " [!] Miner 0x{:08x} gained 50% CPS boost\n",
                     c.miner.miner_id
                 ),
             );
