@@ -120,7 +120,7 @@ fn main() -> Result<(), Error> {
     });
 
     // Main loop
-    let mut update = 0;
+    let mut action_updates = Vec::<String>::new();
     loop {
         // Calculate miner performance and update stats
         process_miners(&connections, &wallets);
@@ -129,17 +129,16 @@ fn main() -> Result<(), Error> {
         let mut msg = print_wallets(&connections, &wallets);
 
         // Roll dice for random actions
-        action_miners(&connections, &mut msg);
+        action_miners(&connections, &mut action_updates);
 
-        if update % 2 == 0 {
-            // Send wallet updates to all connections every 2 seconds
-            send_updates_to_all(msg, &connections);
-            update = 0;
-        }
+        // Format the update messages
+        format_msg(&mut msg, &action_updates);
+
+        // Send wallet updates to all connections every 2 seconds
+        send_updates_to_all(msg, &connections);
 
         // Sleep from all that hard work
         sleep(Duration::from_secs(1));
-        update += 1;
     }
 }
 
@@ -254,6 +253,18 @@ fn print_wallets(
     msg
 }
 
+fn format_msg(input: &mut String, actions: &[String]) {
+    if actions.is_empty() {
+        return;
+    }
+
+    input.push_str(&"\nEvents:\n".to_string());
+
+    for a in actions {
+        input.push_str(a);
+    }
+}
+
 fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>) {
     let mut cons = connections.lock().unwrap();
     let mut rem = Vec::<usize>::new();
@@ -280,9 +291,8 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
     }
 }
 
-fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, input: &mut String) {
+fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String>) {
     let mut rng = rand::thread_rng();
-    let mut msg = "".to_string();
 
     let mut cons = connections.lock().unwrap();
 
@@ -294,10 +304,10 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, input: &mut String) 
             // 0.1 % chance
             c.miner.level = match c.miner.level.checked_sub(1) {
                 Some(n) => {
-                    msg.push_str(&format!(
-                        " [!] Miner 0x{:016x} lost a level\n",
-                        c.miner.miner_id
-                    ));
+                    msg.insert(
+                        0,
+                        format!(" [!] Miner 0x{:016x} lost a level\n", c.miner.miner_id),
+                    );
                     n
                 }
                 None => 0,
@@ -306,10 +316,10 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, input: &mut String) 
             // 0.5 % chance
             c.miner.level = match c.miner.level.checked_add(1) {
                 Some(n) => {
-                    msg.push_str(&format!(
-                        " [!] Miner 0x{:016x} leveled up\n",
-                        c.miner.miner_id
-                    ));
+                    msg.insert(
+                        0,
+                        format!(" [!] Miner 0x{:016x} leveled up\n", c.miner.miner_id),
+                    );
                     n
                 }
                 None => u64::MAX,
@@ -320,15 +330,18 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, input: &mut String) 
                 Some(n) => n,
                 None => u64::MAX,
             };
-            msg.push_str(&format!(
-                " [!] Miner 0x{:016x} gained 50% CPS boost\n",
-                c.miner.miner_id
-            ));
+            msg.insert(
+                0,
+                format!(
+                    " [!] Miner 0x{:016x} gained 50% CPS boost\n",
+                    c.miner.miner_id
+                ),
+            );
         }
     }
 
-    if !msg.is_empty() {
-        input.push_str(&format!("\nEvents:\n{}", msg));
+    if msg.len() > 5 {
+        msg.resize(5, "".to_owned());
     };
 }
 
