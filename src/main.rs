@@ -189,7 +189,6 @@ fn login(
             num += 1;
         }
     }
-    drop(cons);
     if num >= max_miners {
         let msg = format!(
             "Connection refused: Too many miners connected for user 0x{:016x} (max: {})",
@@ -199,9 +198,19 @@ fn login(
         return Err(Error::new(ErrorKind::ConnectionRefused, msg));
     }
 
-    // Generate a random miner_id
+    // Generate a unique random miner_id
     let mut rng = rand::thread_rng();
-    let miner_id: u32 = rng.gen();
+    let mut miner_id: u32;
+    'retry: loop {
+        miner_id = rng.gen();
+        for c in cons.iter() {
+            if miner_id == c.miner.miner_id {
+                continue 'retry;
+            }
+        }
+        break;
+    }
+    drop(cons);
 
     println!(
         "User++ U:0x{:016x} M:0x{:08x} from: {:?}",
