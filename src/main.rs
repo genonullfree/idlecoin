@@ -37,9 +37,10 @@ Please enter your username: ";
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 struct Wallet {
-    id: u64,        // wallet address ID
-    supercoin: u64, // supercoin
-    idlecoin: u64,  // idlecoin
+    id: u64,         // wallet address ID
+    supercoin: u64,  // supercoin
+    idlecoin: u64,   // idlecoin
+    max_miners: u64, // max number of miners
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -163,9 +164,11 @@ fn login(
     // ID or create new wallet
     let mut wals = wallets.lock().unwrap();
     let mut found = false;
+    let mut max_miners = 5;
     for w in wals.iter() {
         if w.id == wallet_id {
             found = true;
+            max_miners = w.max_miners;
         }
     }
     if !found {
@@ -173,6 +176,7 @@ fn login(
             id: wallet_id,
             supercoin: 0,
             idlecoin: 0,
+            max_miners,
         });
     }
     drop(wals);
@@ -186,16 +190,13 @@ fn login(
         }
     }
     drop(cons);
-    if num >= 3 {
-        let msg = format!("User denied U:0x{:016x}, too many miners\n", wallet_id);
+    if num >= max_miners {
+        let msg = format!(
+            "Connection refused: Too many miners connected for user 0x{:016x} (max: {})",
+            wallet_id, max_miners,
+        );
         print!("{}", msg);
-        return Err(Error::new(
-            ErrorKind::ConnectionRefused,
-            format!(
-                "Connection refused: Too many miners connected for user 0x{:016x}.",
-                wallet_id
-            ),
-        ));
+        return Err(Error::new(ErrorKind::ConnectionRefused, msg));
     }
 
     // Generate a random miner_id
@@ -424,7 +425,7 @@ fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
 
     // Exit if file is empty
     if j.is_empty() {
-        return Err(Error::new(ErrorKind::ConnectionRefused, "No data to load"));
+        return Err(Error::new(ErrorKind::InvalidData, "No data to load"));
     }
 
     // Attempt to deserialize the json file data
@@ -436,7 +437,7 @@ fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
         println!("Successfully loaded stats file {}", SAVE);
     } else {
         return Err(Error::new(
-            ErrorKind::ConnectionRefused,
+            ErrorKind::InvalidData,
             format!("Failed to load {}", SAVE),
         ));
     }
