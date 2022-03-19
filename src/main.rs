@@ -120,18 +120,26 @@ fn main() -> Result<(), Error> {
     });
 
     // Main loop
+    let mut update = 0;
     loop {
         // Calculate miner performance and update stats
         process_miners(&connections, &wallets);
 
         // Send updates to all connected miners
-        let msg = print_wallets(&connections, &wallets);
+        let mut msg = print_wallets(&connections, &wallets);
 
-        // Send wallet updates to all connections
-        send_updates_to_all(msg, &connections);
+        // Roll dice for random actions
+        action_miners(&connections, &mut msg);
+
+        if update % 2 == 0 {
+            // Send wallet updates to all connections every 2 seconds
+            send_updates_to_all(msg, &connections);
+            update = 0;
+        }
 
         // Sleep from all that hard work
         sleep(Duration::from_secs(1));
+        update += 1;
     }
 }
 
@@ -272,45 +280,57 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
     }
 }
 
-/*fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
+fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, input: &mut String) {
     let mut rng = rand::thread_rng();
-    let r: u16 = rng.gen();
-    let x: u16 = r % 1000;
     let mut msg = "".to_string();
 
-    if x == 0 {
-        // 0.1 % chance
-        miner.level = match miner.level.checked_sub(1) {
-            Some(n) => {
-                msg = "Oh no! You've lost a level!\n".to_string();
-                n
-            }
-            None => 0,
-        };
-    } else if x <= 5 {
-        // 0.5 % chance
-        miner.level = match miner.level.checked_add(1) {
-            Some(n) => {
-                msg = "Congrats! You've leveled up!\n".to_string();
-                n
-            }
-            None => u64::MAX,
-        };
-    } else if x <= 15 {
-        // 1.0 % chance
-        let prize = match miner.cps.checked_mul(10) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
-        msg = format!("Congrats! You've won {} free idlecoins!\n", prize);
-        add_idlecoins(miner, prize);
+    let mut cons = connections.lock().unwrap();
+
+    for c in cons.iter_mut() {
+        let r: u16 = rng.gen();
+        let x: u16 = r % 1000;
+
+        if x == 0 {
+            // 0.1 % chance
+            c.miner.level = match c.miner.level.checked_sub(1) {
+                Some(n) => {
+                    msg.push_str(&format!(
+                        " [!] Miner 0x{:016x} lost a level\n",
+                        c.miner.miner_id
+                    ));
+                    n
+                }
+                None => 0,
+            };
+        } else if x <= 5 {
+            // 0.5 % chance
+            c.miner.level = match c.miner.level.checked_add(1) {
+                Some(n) => {
+                    msg.push_str(&format!(
+                        " [!] Miner 0x{:016x} leveled up\n",
+                        c.miner.miner_id
+                    ));
+                    n
+                }
+                None => u64::MAX,
+            };
+        } else if x <= 10 {
+            // .5 % chance
+            c.miner.cps += match c.miner.cps.checked_div(2) {
+                Some(n) => n,
+                None => u64::MAX,
+            };
+            msg.push_str(&format!(
+                " [!] Miner 0x{:016x} gained 50% CPS boost\n",
+                c.miner.miner_id
+            ));
+        }
     }
 
-    if !msg.is_empty() && stream.write_all(msg.as_bytes()).is_err() {
-        return false;
+    if !msg.is_empty() {
+        input.push_str(&format!("\nEvents:\n{}", msg));
     };
-    true
-}*/
+}
 
 fn process_miners(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
     let mut cons = connections.lock().unwrap();
