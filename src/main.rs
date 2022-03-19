@@ -56,6 +56,7 @@ struct Miner {
 struct Connection {
     miner: Miner,      // Miner for connection
     stream: TcpStream, // TCP connection
+    updates: String,   // Additional info for specific users
 }
 
 fn main() -> Result<(), Error> {
@@ -90,16 +91,28 @@ fn main() -> Result<(), Error> {
     thread::spawn(move || {
         // Listen for connections
         for stream in listener.incoming() {
-            let s = match stream {
+            let mut s = match stream {
                 Ok(s) => s,
                 Err(_) => continue,
             };
 
             // Allow user session to login
-            // TODO: Limit logins
-            let miner = login(&s, &wallets_close, &connections_close).expect("error logging in");
-
-            let conn = Connection { miner, stream: s };
+            let miner = match login(&s, &wallets_close, &connections_close) {
+                Ok(m) => m,
+                Err(e) => {
+                    if e.kind() == ErrorKind::ConnectionRefused {
+                        s.write_all(format!("\n{}\n", e).as_bytes())
+                            .expect("Failed to send");
+                    }
+                    continue;
+                }
+            };
+            let updates = format!("\nLogged in as: 0x{:016x}", miner.wallet_id).to_owned();
+            let conn = Connection {
+                miner,
+                stream: s,
+                updates,
+            };
 
             let mut c = connections_close.lock().unwrap();
             c.push(conn);
@@ -112,7 +125,10 @@ fn main() -> Result<(), Error> {
         process_miners(&connections, &wallets);
 
         // Send updates to all connected miners
-        print_wallets(&connections, &wallets);
+        let msg = print_wallets(&connections, &wallets);
+
+        // Send wallet updates to all connections
+        send_updates_to_all(msg, &connections);
 
         // Sleep from all that hard work
         sleep(Duration::from_secs(1));
@@ -155,7 +171,7 @@ fn login(
     drop(wals);
 
     // Limit number of connections / miners
-    let mut cons = connections.lock().unwrap();
+    let cons = connections.lock().unwrap();
     let mut num = 0;
     for c in cons.iter() {
         if wallet_id == c.miner.wallet_id {
@@ -164,8 +180,15 @@ fn login(
     }
     drop(cons);
     if num >= 3 {
-        let msg = format!("User denied U:0x{:016x}, too many miners\n", wallet_id,).to_owned();
+        let msg = format!("User denied U:0x{:016x}, too many miners\n", wallet_id);
         print!("{}", msg);
+        return Err(Error::new(
+            ErrorKind::ConnectionRefused,
+            format!(
+                "Connection refused: Too many miners connected for user 0x{:016x}.",
+                wallet_id
+            ),
+        ));
     }
 
     // Generate a random miner_id
@@ -191,10 +214,10 @@ fn login(
 fn print_wallets(
     connections: &Arc<Mutex<Vec<Connection>>>,
     wallets: &Arc<Mutex<Vec<Wallet>>>,
-) -> bool {
+) -> String {
     let mut msg = format!("{}{}v{}\n\n", CLR, IDLECOIN, VERSION);
     let mut gens = wallets.lock().unwrap().deref().clone();
-    let mut cons = connections.lock().unwrap();
+    let cons = connections.lock().unwrap();
 
     gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
@@ -218,12 +241,23 @@ fn print_wallets(
             }
         }
     }
+    drop(cons);
 
-    // TODO: Make this it's own function
+    msg
+}
+
+fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>) {
+    let mut cons = connections.lock().unwrap();
     let mut rem = Vec::<usize>::new();
+
     for (i, c) in cons.iter_mut().enumerate() {
+        // Append updates to input message
+        let mut msg = input.clone();
+        msg.push_str(&c.updates);
+
+        // Send message to connection
         if c.stream.write_all(msg.as_bytes()).is_err() {
-            // Mark miner for disconnection
+            // If error, mark miner for disconnection
             rem.push(i);
             println!(
                 "User-- U:0x{:016x} M:0x{:016x} from: {:?}",
@@ -231,12 +265,11 @@ fn print_wallets(
             );
         }
     }
+
     // Remove disconnected miners
     for i in rem.iter() {
         cons.remove(*i);
     }
-
-    true
 }
 
 /*fn action(mut stream: &TcpStream, mut miner: &mut Wallet) -> bool {
@@ -358,7 +391,7 @@ fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
 
     // Exit if file is empty
     if j.is_empty() {
-        return Err(Error::new(ErrorKind::InvalidData, "No data to load"));
+        return Err(Error::new(ErrorKind::ConnectionRefused, "No data to load"));
     }
 
     // Attempt to deserialize the json file data
@@ -370,7 +403,7 @@ fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
         println!("Successfully loaded stats file {}", SAVE);
     } else {
         return Err(Error::new(
-            ErrorKind::InvalidData,
+            ErrorKind::ConnectionRefused,
             format!("Failed to load {}", SAVE),
         ));
     }
