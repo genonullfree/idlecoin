@@ -9,7 +9,7 @@
 |__/ \_______/|__/ \_______/ \_______/ \______/ |__/|__/  |__/
 ```
 
-This is an idle game where the point is to open a netcat connection to the server and keep it open as long as possible. The longer the connection is active, the more powerful the `idlecoin` generator becomes.
+This is an idle game where the point is to open a netcat connection to the server and keep it open as long as possible. The longer the connection is active, the more powerful the `idlecoin` miners become.
 
 ## Use
 
@@ -31,19 +31,67 @@ The stats are written out to a file `.idlecoin` in the working directory of the 
 ## Output
 
 ```
-+++
-[002] Wallet 0x857933191944b3ba Coins 0:72287, CPS: 3016
-[001] Wallet 0x7d3ce1ed74b2c05f Coins 0:569629, CPS: 28, level: 1 <= ***
-^            ^                        ^         ^               ^
-|            |                        |         |               Mining generation level
-|            |                        |         Coins-per-second
-|            |                        Supercoins:Idlecoins
-|            Wallet ID
+[004] Wallet 0xe7299d9f952a6c31 Coins: 0:16324
+    [+] Miner 0x91e5e95a Cps: 603 Level: 2
+[003] Wallet 0xe8b26b26f8b447f9 Coins: 0:58426
+    [+] Miner 0xedadbfe7 Cps: 342 Level: 2
+[001] Wallet 0x7d3ce1ed74b2c05f Coins: 0:261941
+    [+] Miner 0x3b7c1ffb Cps: 430 Level: 2
+    [+] Miner 0x2c37118e Cps: 546 Level: 3
+
+Events:
+ [!] Miner 0x91e5e95a gained 50% CPS boost
+ [!] Miner 0x2c37118e leveled up
+ [!] Miner 0xedadbfe7 gained 50% CPS boost
+ [!] Miner 0x2c37118e gained 50% CPS boost
+ [!] Miner 0x2c37118e gained 50% CPS boost
+
+Logged in as: 0x7d3ce1ed74b2c05f%       
+```
+
+The display is updated every second. Only Wallets with active miners will be displayed, but the rank number will be accurate for all Wallets on the server.
+
+### Wallet
+
+```
+[002] Wallet 0xe8b26b26f8b447f9 Coins: 0:58426
+^            ^                         ^
+|            |                         Supercoins:Idlecoins
+|            Unique Wallet ID
 Rank number
 ```
 
-* `+++`: The delimiter between updates
-* `***`: The current miner marker
+### Miners
+
+```
+    [+] Miner 0x2c37118e Cps: 546 Level: 3
+              ^               ^          ^
+              |               |          Miner level
+              |               Miner Coins-Per-Second
+              Unique Miner ID
+```
+
+Each wallet supports at least 5 miners.
+
+### Events
+
+```
+Events:
+ [!] Miner 0x91e5e95a gained 50% CPS boost
+ [!] Miner 0x2c37118e leveled up
+ [!] Miner 0xedadbfe7 gained 50% CPS boost
+ [!] Miner 0x2c37118e gained 50% CPS boost
+ [!] Miner 0x2c37118e gained 50% CPS boost
+```
+
+These events are newest on top, and only the most recent 5 are displayed.
+
+These events are special random events that can happen:
+
+1. Gain 50% CPS -- 1.0% chance
+1. Gain 1 Level -- 0.5% chance
+1. Lose 1 Level -- 0.1% chance
+
 
 ## Auto-Login
 
@@ -54,10 +102,3 @@ while true; do echo <USER> |nc <SERVER> <PORT>; done
 
 When that happens the miner level and CPS will be reset to 0, just like starting a new connection.
 
-## Random Events
-
-There are several random events that can happen:
-
-1. Gain 10x CPS coins -- 1.0% chance
-1. Gain 1 Level -- 0.5% chance
-1. Lose 1 Level -- 0.1% chance
