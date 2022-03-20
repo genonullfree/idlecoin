@@ -301,6 +301,8 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
     }
 
     // Remove disconnected miners
+    rem.sort_unstable();
+    rem.reverse();
     for i in rem.iter() {
         cons.remove(*i);
     }
