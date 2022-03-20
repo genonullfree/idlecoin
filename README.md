@@ -88,7 +88,7 @@ These events are newest on top, and only the most recent 5 are displayed.
 
 These events are special random events that can happen:
 
-1. Gain 50% CPS -- 1.0% chance
+1. Gain 10% CPS -- 0.1% chance
 1. Gain 1 Level -- 0.5% chance
 1. Lose 1 Level -- 0.1% chance
 
