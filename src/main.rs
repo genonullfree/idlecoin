@@ -341,16 +341,16 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
                 }
                 None => u64::MAX,
             };
-        } else if x <= 10 {
-            // .5 % chance
-            c.miner.cps += match c.miner.cps.checked_div(2) {
+        } else if x <= 6 {
+            // .1 % chance
+            c.miner.cps += match c.miner.cps.checked_div(10) {
                 Some(n) => n,
                 None => u64::MAX,
             };
             msg.insert(
                 0,
                 format!(
-                    " [!] Miner 0x{:08x} gained 50% CPS boost\n",
+                    " [!] Miner 0x{:08x} gained 10% CPS boost\n",
                     c.miner.miner_id
                 ),
             );
