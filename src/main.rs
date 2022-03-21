@@ -342,34 +342,27 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
 
         if x == 0 {
             // 0.1 % chance
-            c.miner.level = match c.miner.level.checked_sub(1) {
-                Some(n) => {
-                    msg.insert(
-                        0,
-                        format!(" [!] Miner 0x{:08x} lost a level\n", c.miner.miner_id),
-                    );
-                    n
-                }
-                None => 0,
-            };
+            let level = c.miner.level;
+            dec_level(&mut c.miner);
+            if level != c.miner.level {
+                msg.insert(
+                    0,
+                    format!(" [!] Miner 0x{:08x} lost a level\n", c.miner.miner_id),
+                );
+            }
         } else if x <= 5 {
             // 0.5 % chance
-            c.miner.level = match c.miner.level.checked_add(1) {
-                Some(n) => {
-                    msg.insert(
-                        0,
-                        format!(" [!] Miner 0x{:08x} leveled up\n", c.miner.miner_id),
-                    );
-                    n
-                }
-                None => u64::MAX,
+            let level = c.miner.level;
+            inc_level(&mut c.miner);
+            if level != c.miner.level {
+                msg.insert(
+                    0,
+                    format!(" [!] Miner 0x{:08x} leveled up\n", c.miner.miner_id),
+                );
             };
         } else if x <= 6 {
             // .1 % chance
-            c.miner.cps += match c.miner.cps.checked_div(10) {
-                Some(n) => n,
-                None => u64::MAX,
-            };
+            c.miner.cps += c.miner.cps.saturating_div(10);
             msg.insert(
                 0,
                 format!(
@@ -401,15 +394,28 @@ fn process_miners(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex
     }
 }
 
-fn add_idlecoins(mut miner: &mut Wallet, new: u64) {
-    miner.idlecoin = match miner.idlecoin.checked_add(new) {
+fn inc_level(miner: &mut Miner) {
+    miner.level = miner.level.saturating_add(1);
+
+    miner.inc = miner.inc.saturating_add(miner.level);
+
+    miner.pow = miner.pow.saturating_mul(10);
+}
+
+fn dec_level(miner: &mut Miner) {
+    miner.level = miner.level.saturating_sub(1);
+
+    miner.inc = miner.inc.saturating_sub(miner.level);
+
+    miner.pow = miner.pow.saturating_div(10);
+}
+
+fn add_idlecoins(mut wallet: &mut Wallet, new: u64) {
+    wallet.idlecoin = match wallet.idlecoin.checked_add(new) {
         Some(c) => c,
         None => {
-            miner.supercoin = match miner.supercoin.checked_add(1) {
-                Some(s) => s,
-                None => u64::MAX,
-            };
-            let x: u128 = (u128::from(miner.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
+            wallet.supercoin = wallet.supercoin.saturating_add(1);
+            let x: u128 = (u128::from(wallet.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
             x as u64
         }
     };
@@ -418,34 +424,11 @@ fn add_idlecoins(mut miner: &mut Wallet, new: u64) {
 fn miner_session(mut miner: &mut Miner) {
     // Level up
     if miner.cps >= miner.pow {
-        miner.level = match miner.level.checked_add(1) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
-
-        miner.inc = match miner.inc.checked_add(miner.level) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
-
-        miner.pow = match miner.pow.checked_mul(10) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
+        inc_level(miner);
     }
 
     // Increment cps
-    if miner.cps != u64::MAX {
-        miner.cps = match miner.cps.checked_add(miner.inc + miner.level) {
-            Some(n) => n,
-            None => u64::MAX,
-        };
-    }
-
-    // Perform action, maybe (randomly)
-    /*if !action(stream, &mut miner) {
-        break;
-    }*/
+    miner.cps = miner.cps.saturating_add(miner.inc + miner.level);
 }
 
 fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
