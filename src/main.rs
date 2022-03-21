@@ -108,6 +108,11 @@ fn main() -> Result<(), Error> {
                     continue;
                 }
             };
+
+            // Set read timeout
+            s.set_read_timeout(Some(Duration::new(0, 1)))
+                .expect("Unable to set read tiemout");
+
             let updates = format!("\nLogged in as: 0x{:016x}", miner.wallet_id).to_owned();
             let conn = Connection {
                 miner,
@@ -123,6 +128,8 @@ fn main() -> Result<(), Error> {
     // Main loop
     let mut action_updates = Vec::<String>::new();
     loop {
+        read_inputs(&connections, &wallets);
+
         // Calculate miner performance and update stats
         process_miners(&connections, &wallets);
 
@@ -226,6 +233,22 @@ fn login(
         inc: 1,
         pow: 10,
     })
+}
+
+fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, _wallets: &Arc<Mutex<Vec<Wallet>>>) {
+    let mut cons = connections.lock().unwrap();
+
+    for c in cons.iter_mut() {
+        let mut buf = [0; 1024];
+        let len = match c.stream.read(&mut buf) {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+
+        if len > 0 {
+            println!("read {:?} {:?}", c.stream, &buf[..len]);
+        }
+    }
 }
 
 fn print_wallets(
