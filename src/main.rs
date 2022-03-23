@@ -10,6 +10,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 
+use chrono::prelude::*;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use signal_hook::{consts::SIGINT, iterator::Signals};
@@ -235,7 +236,7 @@ fn login(
     })
 }
 
-fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, _wallets: &Arc<Mutex<Vec<Wallet>>>) {
+fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
     let mut cons = connections.lock().unwrap();
 
     for c in cons.iter_mut() {
@@ -247,6 +248,16 @@ fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, _wallets: &Arc<Mutex<V
 
         if len > 0 {
             println!("read {:?} {:?}", c.stream, &buf[..len]);
+            if buf.contains(&98) {
+                let mut wals = wallets.lock().unwrap();
+                for w in wals.iter_mut() {
+                    if w.id == c.miner.wallet_id {
+                        let v = w.idlecoin / 8;
+                        w.idlecoin /= 8;
+                        c.miner.cps = c.miner.cps.saturating_add(v);
+                    }
+                }
+            }
         }
     }
 }
@@ -275,8 +286,8 @@ fn print_wallets(
         for c in cons.iter() {
             if c.miner.wallet_id == g.id {
                 min += &format!(
-                    "    [+] Miner 0x{:08x} Cps: {} Level: {}\n",
-                    c.miner.miner_id, c.miner.cps, c.miner.level,
+                    "    [+] Miner 0x{:08x} Cps: {} Level: {} Inc: {} Pow: {}\n",
+                    c.miner.miner_id, c.miner.cps, c.miner.level, c.miner.inc, c.miner.pow,
                 )
                 .to_owned();
             }
@@ -337,8 +348,9 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
     let mut cons = connections.lock().unwrap();
 
     for c in cons.iter_mut() {
+        let t: DateTime<Local> = Local::now();
         let r: u16 = rng.gen();
-        let x: u16 = r % 1000;
+        let x: u16 = r % 100;
 
         if x == 0 {
             // 0.1 % chance
@@ -347,7 +359,7 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
             if level != c.miner.level {
                 msg.insert(
                     0,
-                    format!(" [!] Miner 0x{:08x} lost a level\n", c.miner.miner_id),
+                    format!(" [{}] Miner 0x{:08x} lost a level\n", t, c.miner.miner_id),
                 );
             }
         } else if x <= 5 {
@@ -357,7 +369,7 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
             if level != c.miner.level {
                 msg.insert(
                     0,
-                    format!(" [!] Miner 0x{:08x} leveled up\n", c.miner.miner_id),
+                    format!(" [{}] Miner 0x{:08x} leveled up\n", t, c.miner.miner_id),
                 );
             };
         } else if x <= 6 {
@@ -366,7 +378,8 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
             msg.insert(
                 0,
                 format!(
-                    " [!] Miner 0x{:08x} gained 10% CPS boost\n",
+                    " [{}] Miner 0x{:08x} gained 10% CPS boost\n",
+                    t,
                     c.miner.miner_id
                 ),
             );
@@ -418,6 +431,20 @@ fn add_idlecoins(mut wallet: &mut Wallet, new: u64) {
             let x: u128 = (u128::from(wallet.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
             x as u64
         }
+    };
+}
+
+fn sub_idlecoins(mut wallet: &mut Wallet, less: u64) {
+    wallet.idlecoin = match wallet.idlecoin.checked_sub(less) {
+        Some(c) => c,
+        None => {
+            if wallet.supercoin > 0 {
+                wallet.supercoin = wallet.supercoin.saturating_sub(1);
+                (u128::from(less) - u128::from(wallet.idlecoin) - u128::from(u64::MAX)).try_into().unwrap()
+            } else {
+                0
+            }
+        },
     };
 }
 
