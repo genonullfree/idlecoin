@@ -3,7 +3,7 @@ use std::hash::Hasher;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, Shutdown, TcpListener, TcpStream};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -106,6 +106,7 @@ fn main() -> Result<(), Error> {
                         s.write_all(format!("\n{}\n", e).as_bytes())
                             .expect("Failed to send");
                     }
+                    s.shutdown(Shutdown::Both).expect("Failed to shutdown");
                     continue;
                 }
             };
@@ -123,6 +124,7 @@ fn main() -> Result<(), Error> {
 
             let mut c = connections_close.lock().unwrap();
             c.push(conn);
+            drop(c);
         }
     });
 
@@ -138,7 +140,7 @@ fn main() -> Result<(), Error> {
         let mut msg = print_wallets(&connections, &wallets);
 
         // Roll dice for random actions
-        action_miners(&connections, &mut action_updates);
+        action_miners(&connections, &wallets, &mut action_updates);
 
         // Format the update messages
         format_msg(&mut msg, &action_updates);
@@ -202,7 +204,8 @@ fn login(
             "Connection refused: Too many miners connected for user 0x{:016x} (max: {})",
             wallet_id, max_miners,
         );
-        print!("{}", msg);
+        println!("{}", msg);
+        drop(cons);
         return Err(Error::new(ErrorKind::ConnectionRefused, msg));
     }
 
@@ -248,18 +251,34 @@ fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Ve
 
         if len > 0 {
             println!("read {:?} {:?}", c.stream, &buf[..len]);
-            if buf.contains(&98) {
+            if buf.contains(&98) { // 'b'
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
-                        let v = w.idlecoin / 8;
-                        w.idlecoin /= 8;
+                        let v = w.idlecoin.saturating_div(10);
+                        w.idlecoin = w.idlecoin.saturating_div(10);
                         c.miner.cps = c.miner.cps.saturating_add(v);
                     }
                 }
+                drop(wals);
+            }
+            if buf.contains(&109) { // 'w'
+                let mut wals = wallets.lock().unwrap();
+                for w in wals.iter_mut() {
+                    if w.id == c.miner.wallet_id {
+                        let price = u64::MAX / (100000 >> (w.max_miners - 5));
+                        println!("price of new wallet: {}", price);
+                        if w.idlecoin > price { // TODO: Have function to calculate this correctly
+                            sub_idlecoins(w, price);
+                            w.max_miners += 1;
+                        }
+                    }
+                }
+                drop(wals);
             }
         }
     }
+    drop(cons);
 }
 
 fn print_wallets(
@@ -298,6 +317,7 @@ fn print_wallets(
         }
     }
     drop(cons);
+    drop(gens);
 
     msg
 }
@@ -340,20 +360,42 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
     for i in rem.iter() {
         cons.remove(*i);
     }
+    drop(cons);
 }
 
-fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String>) {
+fn action_miners(
+    connections: &Arc<Mutex<Vec<Connection>>>,
+    wallets: &Arc<Mutex<Vec<Wallet>>>,
+    msg: &mut Vec<String>,
+) {
     let mut rng = rand::thread_rng();
 
     let mut cons = connections.lock().unwrap();
 
     for c in cons.iter_mut() {
         let t: DateTime<Local> = Local::now();
-        let r: u16 = rng.gen();
-        let x: u16 = r % 100;
+        let x: u64 = rng.gen();
 
-        if x == 0 {
-            // 0.1 % chance
+        if x % 15552000 == 0 {
+            // 0.00000006430041152263 % chance
+            let mut wal = wallets.lock().unwrap();
+            for w in wal.iter_mut() {
+                if w.id == c.miner.wallet_id {
+                    w.supercoin -= w.supercoin.saturating_div(10);
+                    let coins = w.idlecoin.saturating_div(10);
+                    sub_idlecoins(w, coins);
+                    msg.insert(
+                        0,
+                        format!(
+                            " [{}] Wallet 0x{:016x} was taxed 10% by the IRS!\n",
+                            t, c.miner.miner_id
+                        ),
+                    );
+                }
+            }
+            drop(wal);
+        } else if x % 10000 == 0 {
+            // 0.01 % chance
             let level = c.miner.level;
             dec_level(&mut c.miner);
             if level != c.miner.level {
@@ -362,8 +404,8 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
                     format!(" [{}] Miner 0x{:08x} lost a level\n", t, c.miner.miner_id),
                 );
             }
-        } else if x <= 5 {
-            // 0.5 % chance
+        } else if x % 10000 <= 2 {
+            // 0.02 % chance
             let level = c.miner.level;
             inc_level(&mut c.miner);
             if level != c.miner.level {
@@ -372,15 +414,14 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
                     format!(" [{}] Miner 0x{:08x} leveled up\n", t, c.miner.miner_id),
                 );
             };
-        } else if x <= 6 {
-            // .1 % chance
+        } else if x % 10000 <= 3 {
+            // .01 % chance
             c.miner.cps += c.miner.cps.saturating_div(10);
             msg.insert(
                 0,
                 format!(
                     " [{}] Miner 0x{:08x} gained 10% CPS boost\n",
-                    t,
-                    c.miner.miner_id
+                    t, c.miner.miner_id
                 ),
             );
         }
@@ -389,6 +430,8 @@ fn action_miners(connections: &Arc<Mutex<Vec<Connection>>>, msg: &mut Vec<String
     if msg.len() > 5 {
         msg.resize(5, "".to_owned());
     };
+
+    drop(cons);
 }
 
 fn process_miners(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
@@ -405,6 +448,8 @@ fn process_miners(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex
             }
         }
     }
+    drop(wals);
+    drop(cons);
 }
 
 fn inc_level(miner: &mut Miner) {
@@ -440,11 +485,13 @@ fn sub_idlecoins(mut wallet: &mut Wallet, less: u64) {
         None => {
             if wallet.supercoin > 0 {
                 wallet.supercoin = wallet.supercoin.saturating_sub(1);
-                (u128::from(less) - u128::from(wallet.idlecoin) - u128::from(u64::MAX)).try_into().unwrap()
+                (u128::from(less) - u128::from(wallet.idlecoin) - u128::from(u64::MAX))
+                    .try_into()
+                    .unwrap()
             } else {
                 0
             }
-        },
+        }
     };
 }
 
@@ -483,6 +530,7 @@ fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
         // Update the wallets struct
         let mut gens = wallets.lock().unwrap();
         gens.append(&mut wallet);
+        drop(gens);
         println!("Successfully loaded stats file {}", SAVE);
     } else {
         return Err(Error::new(
@@ -498,8 +546,8 @@ fn save_stats(wallets: Arc<Mutex<Vec<Wallet>>>) {
     // Serialize the stats data to json
     println!("Saving stats...");
     let gens = wallets.lock().unwrap();
-
     let j = serde_json::to_string_pretty(&gens.deref()).unwrap();
+    drop(gens);
 
     // Open the stats file for writing
     let mut file = match File::create(&SAVE) {
