@@ -285,7 +285,7 @@ fn read_inputs(
                         msg.insert(
                             0,
                             format!(
-                                "    [{}] Miner 0x{:08x} bought {} Cps with {} idlecoin\n",
+                                " [{}] Miner 0x{:08x} bought {} Cps with {} idlecoin\n",
                                 t, c.miner.miner_id, cps, cost
                             ),
                         );
@@ -308,7 +308,7 @@ fn read_inputs(
                         let cost = u64::MAX / (100000 >> (w.max_miners - 5));
                         if w.idlecoin > cost {
                             let t: DateTime<Local> = Local::now();
-                            msg.insert(0, format!("    [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t, c.miner.wallet_id, cost));
+                            msg.insert(0, format!(" [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t, c.miner.wallet_id, cost));
                             sub_idlecoins(w, cost);
                             w.max_miners += 1;
                         } else {
