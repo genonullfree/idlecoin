@@ -115,7 +115,7 @@ fn main() -> Result<(), Error> {
             s.set_read_timeout(Some(Duration::new(0, 1)))
                 .expect("Unable to set read tiemout");
 
-            let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nControls:\n'c'<enter>\tPurchase Cps with idlecoin\n\nPurchase: ", miner.wallet_id).to_owned()];
+            let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nAvailable commands:\n'c'<enter>\tPurchase Cps with idlecoin\n'm'<enter>\tPurchase a new miner license\n\nCommand:\n", miner.wallet_id).to_owned()];
             let conn = Connection {
                 miner,
                 stream: s,
@@ -262,7 +262,8 @@ fn read_inputs(
                     if w.id == c.miner.wallet_id {
                         if w.idlecoin < 1024 {
                             c.updates.push(
-                                "You need at least 1024 idlecoin to be able to purchase Cps\n".to_string()
+                                "You need at least 1024 idlecoin to be able to purchase Cps\n"
+                                    .to_string(),
                             );
                             continue;
                         }
@@ -281,7 +282,7 @@ fn read_inputs(
                                 c.miner.miner_id, cps, cost
                             ),
                         );
-                        w.idlecoin = w.idlecoin.saturating_sub(cost);
+                        sub_idlecoins(w, cost);
                         c.miner.cps = c.miner.cps.saturating_add(cps);
                     }
                 }
@@ -292,12 +293,22 @@ fn read_inputs(
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
-                        let price = u64::MAX / (100000 >> (w.max_miners - 5));
-                        println!("price of new wallet: {}", price);
-                        if w.idlecoin > price {
+                        if w.max_miners >= 10 {
+                            c.updates
+                                .push("You cannot purchase any more miners\n".to_string());
+                            continue;
+                        }
+                        let cost = u64::MAX / (100000 >> (w.max_miners - 5));
+                        if w.idlecoin > cost {
+                            msg.insert(0, format!("    [*] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", c.miner.wallet_id, cost));
                             // TODO: Have function to calculate this correctly
-                            sub_idlecoins(w, price);
+                            sub_idlecoins(w, cost);
                             w.max_miners += 1;
+                        } else {
+                            c.updates.push(format!(
+                                "You need {} idlecoin to purchase another miner license\n",
+                                cost
+                            ));
                         }
                     }
                 }
