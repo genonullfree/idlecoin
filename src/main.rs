@@ -254,7 +254,13 @@ fn read_inputs(
         };
 
         if len > 0 {
-            println!("read {:?} {:?}", c.stream, &buf[..len]);
+            println!(
+                "> User: 0x{:016x} Miner 0x{:08x} sent: {:?} from: {:?}",
+                c.miner.wallet_id,
+                c.miner.miner_id,
+                &buf[..len],
+                c.stream
+            );
             if buf.contains(&99) {
                 // 'b'
                 let mut wals = wallets.lock().unwrap();
@@ -344,8 +350,8 @@ fn print_wallets(
         for c in cons.iter() {
             if c.miner.wallet_id == g.id {
                 min += &format!(
-                    "    [+] Miner 0x{:08x} Cps: {} Level: {} Inc: {} Pow: {}\n",
-                    c.miner.miner_id, c.miner.cps, c.miner.level, c.miner.inc, c.miner.pow,
+                    "    [+] Miner 0x{:08x} Cps: {} Level: {}\n",
+                    c.miner.miner_id, c.miner.cps, c.miner.level,
                 )
                 .to_owned();
             }
