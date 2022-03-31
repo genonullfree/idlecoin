@@ -3,7 +3,7 @@ use std::hash::Hasher;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
-use std::net::{SocketAddr, Shutdown, TcpListener, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -56,9 +56,9 @@ struct Miner {
 
 #[derive(Debug)]
 struct Connection {
-    miner: Miner,      // Miner for connection
-    stream: TcpStream, // TCP connection
-    updates: String,   // Additional info for specific users
+    miner: Miner,         // Miner for connection
+    stream: TcpStream,    // TCP connection
+    updates: Vec<String>, // Additional info for specific users
 }
 
 fn main() -> Result<(), Error> {
@@ -115,7 +115,7 @@ fn main() -> Result<(), Error> {
             s.set_read_timeout(Some(Duration::new(0, 1)))
                 .expect("Unable to set read tiemout");
 
-            let updates = format!("\nLogged in as: 0x{:016x}", miner.wallet_id).to_owned();
+            let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nControls:\n'c'<enter>\tPurchase Cps with idlecoin\n\nPurchase: ", miner.wallet_id).to_owned()];
             let conn = Connection {
                 miner,
                 stream: s,
@@ -131,7 +131,7 @@ fn main() -> Result<(), Error> {
     // Main loop
     let mut action_updates = Vec::<String>::new();
     loop {
-        read_inputs(&connections, &wallets);
+        read_inputs(&connections, &wallets, &mut action_updates);
 
         // Calculate miner performance and update stats
         process_miners(&connections, &wallets);
@@ -239,7 +239,11 @@ fn login(
     })
 }
 
-fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
+fn read_inputs(
+    connections: &Arc<Mutex<Vec<Connection>>>,
+    wallets: &Arc<Mutex<Vec<Wallet>>>,
+    msg: &mut Vec<String>,
+) {
     let mut cons = connections.lock().unwrap();
 
     for c in cons.iter_mut() {
@@ -251,24 +255,47 @@ fn read_inputs(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Ve
 
         if len > 0 {
             println!("read {:?} {:?}", c.stream, &buf[..len]);
-            if buf.contains(&98) { // 'b'
+            if buf.contains(&99) {
+                // 'b'
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
-                        let v = w.idlecoin.saturating_div(10);
-                        w.idlecoin = w.idlecoin.saturating_div(10);
-                        c.miner.cps = c.miner.cps.saturating_add(v);
+                        if w.idlecoin < 1024 {
+                            c.updates.push(
+                                "You need at least 1024 idlecoin to be able to purchase Cps\n".to_string()
+                            );
+                            continue;
+                        }
+                        let v = u64::BITS - w.idlecoin.leading_zeros() - 1;
+                        let cost = 1u64.checked_shl(v).unwrap_or(0);
+                        let cps = if cost > 0 {
+                            1u64.checked_shl(v / 2).unwrap_or(0)
+                        } else {
+                            0
+                        };
+
+                        msg.insert(
+                            0,
+                            format!(
+                                "    [*] Miner 0x{:08x} bought {} Cps with {} idlecoin\n",
+                                c.miner.miner_id, cps, cost
+                            ),
+                        );
+                        w.idlecoin = w.idlecoin.saturating_sub(cost);
+                        c.miner.cps = c.miner.cps.saturating_add(cps);
                     }
                 }
                 drop(wals);
             }
-            if buf.contains(&109) { // 'w'
+            if buf.contains(&109) {
+                // 'w'
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
                         let price = u64::MAX / (100000 >> (w.max_miners - 5));
                         println!("price of new wallet: {}", price);
-                        if w.idlecoin > price { // TODO: Have function to calculate this correctly
+                        if w.idlecoin > price {
+                            // TODO: Have function to calculate this correctly
                             sub_idlecoins(w, price);
                             w.max_miners += 1;
                         }
@@ -341,7 +368,9 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
     for (i, c) in cons.iter_mut().enumerate() {
         // Append updates to input message
         let mut msg = input.clone();
-        msg.push_str(&c.updates);
+        for u in &c.updates {
+            msg.push_str(u);
+        }
 
         // Send message to connection
         if c.stream.write_all(msg.as_bytes()).is_err() {
@@ -351,6 +380,9 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
                 "User-- U:0x{:016x} M:0x{:08x} from: {:?}",
                 c.miner.wallet_id, c.miner.miner_id, c.stream
             );
+        }
+        while c.updates.len() > 1 {
+            c.updates.pop();
         }
     }
 
