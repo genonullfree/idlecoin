@@ -103,17 +103,27 @@ fn main() -> Result<(), Error> {
                 Ok(m) => m,
                 Err(e) => {
                     if e.kind() == ErrorKind::ConnectionRefused {
-                        s.write_all(format!("\n{}\n", e).as_bytes())
-                            .expect("Failed to send");
+                        match s.write_all(format!("\n{}\n", e).as_bytes()) {
+                            Ok(_) => (),
+                            Err(e) => println!("Failed to send: {e}"),
+                        };
                     }
-                    s.shutdown(Shutdown::Both).expect("Failed to shutdown");
+                    match s.shutdown(Shutdown::Both) {
+                        Ok(_) => (),
+                        Err(e) => println!("Failed to shutdown: {e}"),
+                    };
                     continue;
                 }
             };
 
             // Set read timeout
-            s.set_read_timeout(Some(Duration::new(0, 1)))
-                .expect("Unable to set read tiemout");
+            match s.set_read_timeout(Some(Duration::new(0, 1))) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("Unable to set read tiemout: {e}");
+                    continue;
+                }
+            };
 
             let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nAvailable commands:\n'c'<enter>\tPurchase Cps with idlecoin\n'm'<enter>\tPurchase a new miner license\n\nCommand:\n", miner.wallet_id).to_owned()];
             let conn = Connection {
@@ -164,7 +174,16 @@ fn login(
 
     // Read userid
     let mut id_raw: [u8; 1024] = [0; 1024];
-    let _ = stream.read(&mut id_raw[..])?;
+
+    // Only read 0-1023 to have the end NULL so we can safely do the
+    // \r\n => \n\0 conversion
+    let len = stream.read(&mut id_raw[..1023])?;
+    for i in 0..len {
+        if id_raw[i] == b'\r' && id_raw[i + 1] == b'\n' {
+            id_raw[i] = b'\n';
+            id_raw[i + 1] = 0x0;
+        }
+    }
 
     // Calculate the hash of the wallet_id
     let mut hash = xxh3::Xxh3::new();
@@ -266,7 +285,7 @@ fn read_inputs(
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
-                        if w.idlecoin < 1024 {
+                        if w.idlecoin < 1024 && w.supercoin < 1 {
                             c.updates.push(
                                 "You need at least 1024 idlecoin to be able to purchase Cps\n"
                                     .to_string(),
@@ -286,7 +305,10 @@ fn read_inputs(
                             0,
                             format!(
                                 " [{}] Miner 0x{:08x} bought {} Cps with {} idlecoin\n",
-                                t, c.miner.miner_id, cps, cost
+                                t.format("%Y-%m-%d %H:%M:%S"),
+                                c.miner.miner_id,
+                                cps,
+                                cost
                             ),
                         );
                         sub_idlecoins(w, cost);
@@ -306,9 +328,9 @@ fn read_inputs(
                             continue;
                         }
                         let cost = u64::MAX / (100000 >> (w.max_miners - 5));
-                        if w.idlecoin > cost {
+                        if w.idlecoin > cost || w.supercoin > 0 {
                             let t: DateTime<Local> = Local::now();
-                            msg.insert(0, format!(" [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t, c.miner.wallet_id, cost));
+                            msg.insert(0, format!(" [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t.format("%Y-%m-%d %H:%M:%S"), c.miner.wallet_id, cost));
                             sub_idlecoins(w, cost);
                             w.max_miners += 1;
                         } else {
@@ -338,15 +360,8 @@ fn print_wallets(
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
     for (i, g) in gens.iter().enumerate() {
-        let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Coins: {}:{}\n",
-            gens.len() - i,
-            g.id,
-            g.supercoin,
-            g.idlecoin,
-        )
-        .to_owned();
         let mut min: String = "".to_string();
+        let mut total_cps = 0u128;
         for c in cons.iter() {
             if c.miner.wallet_id == g.id {
                 min += &format!(
@@ -354,8 +369,19 @@ fn print_wallets(
                     c.miner.miner_id, c.miner.cps, c.miner.level,
                 )
                 .to_owned();
+                total_cps += c.miner.cps as u128;
             }
         }
+        let wal = &format!(
+            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {}\n",
+            gens.len() - i,
+            g.id,
+            g.supercoin,
+            g.idlecoin,
+            g.max_miners,
+            total_cps,
+        )
+        .to_owned();
         if !min.is_empty() {
             msg += wal;
             msg += &min;
@@ -438,7 +464,8 @@ fn action_miners(
                         0,
                         format!(
                             " [{}] Wallet 0x{:016x} was taxed 10% by the IRS!\n",
-                            t, c.miner.miner_id
+                            t.format("%Y-%m-%d %H:%M:%S"),
+                            c.miner.miner_id
                         ),
                     );
                 }
@@ -451,7 +478,11 @@ fn action_miners(
             if level != c.miner.level {
                 msg.insert(
                     0,
-                    format!(" [{}] Miner 0x{:08x} lost a level\n", t, c.miner.miner_id),
+                    format!(
+                        " [{}] Miner 0x{:08x} lost a level\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.miner_id
+                    ),
                 );
             }
         } else if x % 10000 <= 2 {
@@ -461,7 +492,11 @@ fn action_miners(
             if level != c.miner.level {
                 msg.insert(
                     0,
-                    format!(" [{}] Miner 0x{:08x} leveled up\n", t, c.miner.miner_id),
+                    format!(
+                        " [{}] Miner 0x{:08x} leveled up\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.miner_id
+                    ),
                 );
             };
         } else if x % 10000 <= 3 {
@@ -471,7 +506,8 @@ fn action_miners(
                 0,
                 format!(
                     " [{}] Miner 0x{:08x} gained 10% CPS boost\n",
-                    t, c.miner.miner_id
+                    t.format("%Y-%m-%d %H:%M:%S"),
+                    c.miner.miner_id
                 ),
             );
         }
@@ -535,7 +571,7 @@ fn sub_idlecoins(mut wallet: &mut Wallet, less: u64) {
         None => {
             if wallet.supercoin > 0 {
                 wallet.supercoin = wallet.supercoin.saturating_sub(1);
-                (u128::from(less) - u128::from(wallet.idlecoin) - u128::from(u64::MAX))
+                (u128::from(u64::MAX) - u128::from(less) + u128::from(wallet.idlecoin))
                     .try_into()
                     .unwrap()
             } else {
