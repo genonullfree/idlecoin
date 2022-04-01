@@ -285,7 +285,7 @@ fn read_inputs(
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
-                        if w.idlecoin < 1024 {
+                        if w.idlecoin < 1024 && w.supercoin < 1 {
                             c.updates.push(
                                 "You need at least 1024 idlecoin to be able to purchase Cps\n"
                                     .to_string(),
@@ -325,7 +325,7 @@ fn read_inputs(
                             continue;
                         }
                         let cost = u64::MAX / (100000 >> (w.max_miners - 5));
-                        if w.idlecoin > cost {
+                        if w.idlecoin > cost || w.supercoin > 0 {
                             let t: DateTime<Local> = Local::now();
                             msg.insert(0, format!(" [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t, c.miner.wallet_id, cost));
                             sub_idlecoins(w, cost);
@@ -370,11 +370,12 @@ fn print_wallets(
             }
         }
         let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Total Cps: {}\n",
+            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {}\n",
             gens.len() - i,
             g.id,
             g.supercoin,
             g.idlecoin,
+            g.max_miners,
             total_cps,
         )
         .to_owned();
@@ -557,7 +558,7 @@ fn sub_idlecoins(mut wallet: &mut Wallet, less: u64) {
         None => {
             if wallet.supercoin > 0 {
                 wallet.supercoin = wallet.supercoin.saturating_sub(1);
-                (u128::from(less) - u128::from(wallet.idlecoin) - u128::from(u64::MAX))
+                (u128::from(u64::MAX) - u128::from(less) + u128::from(wallet.idlecoin))
                     .try_into()
                     .unwrap()
             } else {
