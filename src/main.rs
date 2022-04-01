@@ -174,7 +174,16 @@ fn login(
 
     // Read userid
     let mut id_raw: [u8; 1024] = [0; 1024];
-    let _ = stream.read(&mut id_raw[..])?;
+
+    // Only read 0-1023 to have the end NULL so we can safely do the
+    // \r\n => \n\0 conversion
+    let len = stream.read(&mut id_raw[..1023])?;
+    for i in 0..len {
+        if id_raw[i] == b'\r' && id_raw[i + 1] == b'\n' {
+            id_raw[i] = b'\n';
+            id_raw[i + 1] = 0x0;
+        }
+    }
 
     // Calculate the hash of the wallet_id
     let mut hash = xxh3::Xxh3::new();
