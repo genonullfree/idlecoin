@@ -103,17 +103,27 @@ fn main() -> Result<(), Error> {
                 Ok(m) => m,
                 Err(e) => {
                     if e.kind() == ErrorKind::ConnectionRefused {
-                        s.write_all(format!("\n{}\n", e).as_bytes())
-                            .expect("Failed to send");
+                        match s.write_all(format!("\n{}\n", e).as_bytes()) {
+                            Ok(_) => (),
+                            Err(e) => println!("Failed to send: {e}"),
+                        };
                     }
-                    s.shutdown(Shutdown::Both).expect("Failed to shutdown");
+                    match s.shutdown(Shutdown::Both) {
+                        Ok(_) => (),
+                        Err(e) => println!("Failed to shutdown: {e}"),
+                    };
                     continue;
                 }
             };
 
             // Set read timeout
-            s.set_read_timeout(Some(Duration::new(0, 1)))
-                .expect("Unable to set read tiemout");
+            match s.set_read_timeout(Some(Duration::new(0, 1))) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("Unable to set read tiemout: {e}");
+                    continue;
+                }
+            };
 
             let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nAvailable commands:\n'c'<enter>\tPurchase Cps with idlecoin\n'm'<enter>\tPurchase a new miner license\n\nCommand:\n", miner.wallet_id).to_owned()];
             let conn = Connection {
