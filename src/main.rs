@@ -357,15 +357,8 @@ fn print_wallets(
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
     for (i, g) in gens.iter().enumerate() {
-        let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Coins: {}:{}\n",
-            gens.len() - i,
-            g.id,
-            g.supercoin,
-            g.idlecoin,
-        )
-        .to_owned();
         let mut min: String = "".to_string();
+        let mut total_cps = 0u128;
         for c in cons.iter() {
             if c.miner.wallet_id == g.id {
                 min += &format!(
@@ -373,8 +366,18 @@ fn print_wallets(
                     c.miner.miner_id, c.miner.cps, c.miner.level,
                 )
                 .to_owned();
+                total_cps += c.miner.cps as u128;
             }
         }
+        let wal = &format!(
+            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Total Cps: {}\n",
+            gens.len() - i,
+            g.id,
+            g.supercoin,
+            g.idlecoin,
+            total_cps,
+        )
+        .to_owned();
         if !min.is_empty() {
             msg += wal;
             msg += &min;
