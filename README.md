@@ -40,11 +40,11 @@ The stats are written out to a file `.idlecoin` in the working directory of the 
     [+] Miner 0x2c37118e Cps: 546 Level: 3
 
 Events:
- [!] Miner 0x91e5e95a gained 50% CPS boost
+ [!] Miner 0x91e5e95a gained 10% CPS boost
  [!] Miner 0x2c37118e leveled up
- [!] Miner 0xedadbfe7 gained 50% CPS boost
- [!] Miner 0x2c37118e gained 50% CPS boost
- [!] Miner 0x2c37118e gained 50% CPS boost
+ [!] Miner 0xedadbfe7 gained 10% CPS boost
+ [!] Miner 0x2c37118e gained 10% CPS boost
+ [!] Miner 0x2c37118e gained 10% CPS boost
 
 Logged in as: 0x7d3ce1ed74b2c05f%       
 ```
@@ -77,20 +77,20 @@ Each wallet supports at least 5 miners.
 
 ```
 Events:
- [!] Miner 0x91e5e95a gained 50% CPS boost
+ [!] Miner 0x91e5e95a gained 10% CPS boost
  [!] Miner 0x2c37118e leveled up
- [!] Miner 0xedadbfe7 gained 50% CPS boost
- [!] Miner 0x2c37118e gained 50% CPS boost
- [!] Miner 0x2c37118e gained 50% CPS boost
+ [!] Miner 0xedadbfe7 gained 10% CPS boost
+ [!] Miner 0x2c37118e gained 10% CPS boost
+ [!] Miner 0x2c37118e gained 10% CPS boost
 ```
 
 These events are newest on top, and only the most recent 5 are displayed.
 
 These events are special random events that can happen:
 
-1. Gain 10% CPS -- 0.1% chance
-1. Gain 1 Level -- 0.5% chance
-1. Lose 1 Level -- 0.1% chance
+1. Gain 10% CPS -- 0.01% chance
+1. Gain 1 Level -- 0.02% chance
+1. Lose 1 Level -- 0.01% chance
 
 
 ## Auto-Login
@@ -99,6 +99,8 @@ To setup your terminal to auto-login in case the connection with the server is i
 ```bash
 while true; do echo <USER> |nc <SERVER> <PORT>; done
 ```
+
+*NOTE*: When logging in this way you will be unable to purchase upgrades with this miner. STDIN is not routed through `nc`.
 
 When that happens the miner level and CPS will be reset to 0, just like starting a new connection.
 

@@ -305,7 +305,10 @@ fn read_inputs(
                             0,
                             format!(
                                 " [{}] Miner 0x{:08x} bought {} Cps with {} idlecoin\n",
-                                t, c.miner.miner_id, cps, cost
+                                t.format("%Y-%m-%d %H:%M:%S"),
+                                c.miner.miner_id,
+                                cps,
+                                cost
                             ),
                         );
                         sub_idlecoins(w, cost);
@@ -327,7 +330,7 @@ fn read_inputs(
                         let cost = u64::MAX / (100000 >> (w.max_miners - 5));
                         if w.idlecoin > cost || w.supercoin > 0 {
                             let t: DateTime<Local> = Local::now();
-                            msg.insert(0, format!(" [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t, c.miner.wallet_id, cost));
+                            msg.insert(0, format!(" [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n", t.format("%Y-%m-%d %H:%M:%S"), c.miner.wallet_id, cost));
                             sub_idlecoins(w, cost);
                             w.max_miners += 1;
                         } else {
@@ -461,7 +464,8 @@ fn action_miners(
                         0,
                         format!(
                             " [{}] Wallet 0x{:016x} was taxed 10% by the IRS!\n",
-                            t, c.miner.miner_id
+                            t.format("%Y-%m-%d %H:%M:%S"),
+                            c.miner.miner_id
                         ),
                     );
                 }
@@ -474,7 +478,11 @@ fn action_miners(
             if level != c.miner.level {
                 msg.insert(
                     0,
-                    format!(" [{}] Miner 0x{:08x} lost a level\n", t, c.miner.miner_id),
+                    format!(
+                        " [{}] Miner 0x{:08x} lost a level\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.miner_id
+                    ),
                 );
             }
         } else if x % 10000 <= 2 {
@@ -484,7 +492,11 @@ fn action_miners(
             if level != c.miner.level {
                 msg.insert(
                     0,
-                    format!(" [{}] Miner 0x{:08x} leveled up\n", t, c.miner.miner_id),
+                    format!(
+                        " [{}] Miner 0x{:08x} leveled up\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.miner_id
+                    ),
                 );
             };
         } else if x % 10000 <= 3 {
@@ -494,7 +506,8 @@ fn action_miners(
                 0,
                 format!(
                     " [{}] Miner 0x{:08x} gained 10% CPS boost\n",
-                    t, c.miner.miner_id
+                    t.format("%Y-%m-%d %H:%M:%S"),
+                    c.miner.miner_id
                 ),
             );
         }
