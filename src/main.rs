@@ -52,6 +52,7 @@ struct Miner {
     cps: u64,       // coin-per-second
     inc: u64,       // Incrementor value
     pow: u64,       // Next level up value
+    boost: u64,     // Seconds of boosted cps
 }
 
 #[derive(Debug)]
@@ -125,7 +126,8 @@ fn main() -> Result<(), Error> {
                 }
             };
 
-            let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nAvailable commands:\n'c'<enter>\tPurchase Cps with idlecoin\n'm'<enter>\tPurchase a new miner license\n\nCommand:\n", miner.wallet_id).to_owned()];
+            // TODO: Fix this string
+            let updates = vec![format!("\nLogged in as: 0x{:016x}\n\nAvailable commands:\n'b'<enter>\tPurchase Boost with idlecoin to increase Cps speed\n'm'<enter>\tPurchase a new miner license\n\nCommand:\n", miner.wallet_id).to_owned()];
             let conn = Connection {
                 miner,
                 stream: s,
@@ -255,6 +257,7 @@ fn login(
         cps: 0,
         inc: 1,
         pow: 10,
+        boost: 0,
     })
 }
 
@@ -280,45 +283,43 @@ fn read_inputs(
                 &buf[..len],
                 c.stream
             );
-            if buf.contains(&99) {
+        }
+
+        for i in buf[..len].iter() {
+            // TODO: Rework buying
+            if *i == 98 {
                 // 'b'
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
                         if w.idlecoin < 1024 && w.supercoin < 1 {
                             c.updates.push(
-                                "You need at least 1024 idlecoin to be able to purchase Cps\n"
+                                "You need at least 1024 idlecoin to be able to purchase boost\n"
                                     .to_string(),
                             );
                             continue;
                         }
-                        let v = u64::BITS - w.idlecoin.leading_zeros() - 1;
-                        let cost = 1u64.checked_shl(v).unwrap_or(0);
-                        let cps = if cost > 0 {
-                            1u64.checked_shl(v / 2).unwrap_or(0)
-                        } else {
-                            0
-                        };
-
+                        let cost = 1024u64;
+                        let boost = 128u64;
                         let t: DateTime<Local> = Local::now();
                         msg.insert(
                             0,
                             format!(
-                                " [{}] Miner 0x{:08x} bought {} Cps with {} idlecoin\n",
+                                " [{}] Miner 0x{:08x} bought {} boost seconds with {} idlecoin\n",
                                 t.format("%Y-%m-%d %H:%M:%S"),
                                 c.miner.miner_id,
-                                cps,
+                                boost,
                                 cost
                             ),
                         );
                         sub_idlecoins(w, cost);
-                        c.miner.cps = c.miner.cps.saturating_add(cps);
+                        c.miner.boost = c.miner.boost.saturating_add(boost);
                     }
                 }
                 drop(wals);
             }
-            if buf.contains(&109) {
-                // 'w'
+            if *i == 109 {
+                // 'm'
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
@@ -360,17 +361,53 @@ fn print_wallets(
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
 
     for (i, g) in gens.iter().enumerate() {
-        let mut min: String = "".to_string();
+        let mut min = String::new();
         let mut total_cps = 0u128;
+        let mut miner_top: Vec<String> = vec![];
+        let mut miner_mid: Vec<String> = vec![];
+        let mut miner_bot: Vec<String> = vec![];
+        let mut num = 0;
         for c in cons.iter() {
             if c.miner.wallet_id == g.id {
-                min += &format!(
-                    "    [+] Miner 0x{:08x} Cps: {} Level: {}\n",
-                    c.miner.miner_id, c.miner.cps, c.miner.level,
-                )
-                .to_owned();
+                miner_top.push(format!("{:>11}x{:0>8x} ", 0, c.miner.miner_id,).to_owned());
+                miner_mid.push(format!("{:>16} Cps ", c.miner.cps,).to_owned());
+                miner_bot
+                    .push(format!("{:>11}B {:>5}L ", c.miner.boost, c.miner.level,).to_owned());
                 total_cps += c.miner.cps as u128;
+                num += 1;
+                if num > 4 {
+                    for i in &miner_top {
+                        min += i;
+                    }
+                    min += "\n";
+                    for i in &miner_mid {
+                        min += i;
+                    }
+                    min += "\n";
+                    for i in &miner_bot {
+                        min += i;
+                    }
+                    min += "\n";
+                    num = 0;
+                    miner_top = vec![];
+                    miner_mid = vec![];
+                    miner_bot = vec![];
+                }
             }
+        }
+        if num > 0 {
+            for i in &miner_top {
+                min += i;
+            }
+            min += "\n";
+            for i in &miner_mid {
+                min += i;
+            }
+            min += "\n";
+            for i in &miner_bot {
+                min += i;
+            }
+            min += "\n";
         }
         let wal = &format!(
             "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {}\n",
@@ -384,6 +421,7 @@ fn print_wallets(
         .to_owned();
         if !min.is_empty() {
             msg += wal;
+            msg += "  [*] Miners\n";
             msg += &min;
         }
     }
@@ -588,7 +626,13 @@ fn miner_session(mut miner: &mut Miner) {
     }
 
     // Increment cps
-    miner.cps = miner.cps.saturating_add(miner.inc + miner.level);
+    let increase = if miner.boost > 0 {
+        miner.boost -= 1;
+        (miner.inc + miner.level) * 3
+    } else {
+        miner.inc + miner.level
+    };
+    miner.cps = miner.cps.saturating_add(increase);
 }
 
 fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
