@@ -25,6 +25,7 @@ const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
 const ABS_MAX_MINERS: u64 = 25;
+const ABS_MAX_EVENTS: usize = 5;
 const IDLECOIN: &str = r"
 
  /$$       /$$ /$$                               /$$
@@ -165,7 +166,7 @@ fn main() -> Result<(), Error> {
         miner::action_miners(&connections, &wallets, &mut action_updates);
 
         // Format the update messages
-        format_msg(&mut msg, &action_updates);
+        format_msg(&mut msg, &mut action_updates);
 
         // Send wallet updates to all connections every 2 seconds
         send_updates_to_all(msg, &connections);
@@ -378,12 +379,16 @@ fn print_wallets(
     msg
 }
 
-fn format_msg(input: &mut String, actions: &[String]) {
+fn format_msg(input: &mut String, actions: &mut Vec<String>) {
     if actions.is_empty() {
         return;
     }
 
     input.push_str(&"\nEvents:\n".to_string());
+
+    if actions.len() > ABS_MAX_EVENTS {
+        actions.resize(ABS_MAX_EVENTS, "".to_owned());
+    };
 
     for a in actions {
         input.push_str(a);

@@ -99,6 +99,10 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
             .push("You need at least 1024 Cps to be able to purchase boost\n".to_string());
         return 0;
     }
+    if connection.miner.boost > u16::MAX as u64 {
+        connection.updates.push("You cannot purchase any more boost right now\n".to_string());
+        return 0;
+    }
     let cost = boost_cost(connection.miner.cps);
     if wallet.idlecoin < cost && wallet.supercoin == 0 {
         connection
