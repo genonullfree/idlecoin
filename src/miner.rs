@@ -81,7 +81,10 @@ pub fn action_miners(
     drop(cons);
 }
 
-pub fn process_miners(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
+pub fn process_miners(
+    connections: &Arc<Mutex<Vec<Connection>>>,
+    wallets: &Arc<Mutex<Vec<Wallet>>>,
+) {
     let mut cons = connections.lock().unwrap();
     let mut wals = wallets.lock().unwrap();
 

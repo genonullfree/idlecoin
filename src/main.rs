@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use xxhash_rust::xxh3;
 
-mod file;
 mod commands;
+mod file;
 mod miner;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -61,9 +61,9 @@ pub struct Miner {
 
 #[derive(Debug)]
 pub struct Connection {
-    miner: Miner,         // Miner for connection
-    stream: TcpStream,    // TCP connection
-    updates: Vec<String>, // Additional info for specific users
+    miner: Miner,           // Miner for connection
+    stream: TcpStream,      // TCP connection
+    updates: Vec<String>,   // Additional info for specific users
     purchases: Vec<String>, // Prices and available things for purchasing
 }
 
@@ -272,7 +272,7 @@ fn print_wallets(
 ) -> String {
     let mut msg = format!("{}{}v{}\n\n", CLR, IDLECOIN, VERSION);
     let mut gens = wallets.lock().unwrap().deref().clone();
-    let cons = connections.lock().unwrap();
+    let mut cons = connections.lock().unwrap();
 
     gens.sort_by(|a, b| a.idlecoin.cmp(&b.idlecoin));
     gens.sort_by(|a, b| a.supercoin.cmp(&b.supercoin));
@@ -284,8 +284,25 @@ fn print_wallets(
         let mut miner_mid: Vec<String> = vec![];
         let mut miner_bot: Vec<String> = vec![];
         let mut num = 0;
-        for c in cons.iter() {
+        for c in cons.iter_mut() {
             if c.miner.wallet_id == g.id {
+                // List purchases that can be made
+                if g.idlecoin > 1024 || g.supercoin > 1 {
+                    c.purchases = vec!["Commands:\n".to_string()];
+                    c.purchases
+                        .push("'b'<enter>\tPurchase 128 boost for 1024 idlecoin\n".to_string());
+                    if g.max_miners != 10
+                        && (g.idlecoin > (u64::MAX / (100000 >> (g.max_miners - 5)))
+                            || g.supercoin > 1)
+                    {
+                        c.purchases.push(format!(
+                            "'m'<enter>\tPurchase 1 Miner License for {} idlecoin\n",
+                            u64::MAX / (100000 >> (g.max_miners - 5))
+                        ));
+                    }
+                }
+
+                // Build miner display
                 miner_top.push(format!("{:>11}x{:0>8x} ", 0, c.miner.miner_id,).to_owned());
                 miner_mid.push(format!("{:>16} Cps ", c.miner.cps,).to_owned());
                 miner_bot
@@ -326,6 +343,7 @@ fn print_wallets(
             }
             min += "\n";
         }
+
         let wal = &format!(
             "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {}\n",
             gens.len() - i,
@@ -336,6 +354,7 @@ fn print_wallets(
             total_cps,
         )
         .to_owned();
+
         if !min.is_empty() {
             msg += wal;
             msg += "  [*] Miners\n";
@@ -369,6 +388,10 @@ fn send_updates_to_all(input: String, connections: &Arc<Mutex<Vec<Connection>>>)
         let mut msg = input.clone();
         for u in &c.updates {
             msg.push_str(u);
+        }
+
+        for p in &c.purchases {
+            msg.push_str(p);
         }
 
         // Send message to connection
