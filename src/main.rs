@@ -289,8 +289,15 @@ fn print_wallets(
                 // List purchases that can be made
                 if g.idlecoin > 1024 || g.supercoin > 1 {
                     c.purchases = vec!["Commands:\n".to_string()];
-                    c.purchases
-                        .push("'b'<enter>\tPurchase 128 boost for 1024 idlecoin\n".to_string());
+                    if c.miner.cps > 1024 {
+                        c.purchases.push(
+                            format!(
+                                "'b'<enter>\tPurchase 128 boost for {} idlecoin\n",
+                                commands::boost_cost(c.miner.cps)
+                            )
+                            .to_string(),
+                        );
+                    }
                     if g.max_miners != 10
                         && (g.idlecoin > (u64::MAX / (100000 >> (g.max_miners - 5)))
                             || g.supercoin > 1)
@@ -306,7 +313,7 @@ fn print_wallets(
                 miner_top.push(format!("{:>11}x{:0>8x} ", 0, c.miner.miner_id,).to_owned());
                 miner_mid.push(format!("{:>16} Cps ", c.miner.cps,).to_owned());
                 miner_bot
-                    .push(format!("{:>11}B {:>5}L ", c.miner.boost, c.miner.level,).to_owned());
+                    .push(format!("{:>15}B {:>2}L ", c.miner.boost, c.miner.level,).to_owned());
                 total_cps += c.miner.cps as u128;
                 num += 1;
                 if num > 4 {
