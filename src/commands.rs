@@ -31,6 +31,7 @@ pub fn read_inputs(
 
         for i in buf[..len].iter() {
             if *i == b'b' {
+                // Purchase boost
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
@@ -44,6 +45,7 @@ pub fn read_inputs(
                 drop(wals);
             }
             if *i == b'm' {
+                // Purchase miner licenses
                 let mut wals = wallets.lock().unwrap();
                 for w in wals.iter_mut() {
                     if w.id == c.miner.wallet_id {
@@ -74,7 +76,7 @@ pub fn read_inputs(
             msg.insert(
                 0,
                 format!(
-                    " [{}] Wallet 0x{:016x} bought a new miner license with {} idlecoin\n",
+                    " [{}] Wallet 0x{:016x} bought new miner license(s) with {} idlecoin\n",
                     t.format("%Y-%m-%d %H:%M:%S"),
                     c.miner.wallet_id,
                     new_miners_cost
@@ -85,19 +87,30 @@ pub fn read_inputs(
     drop(cons);
 }
 
+pub fn boost_cost(cps: u64) -> u64 {
+    let v = u64::BITS - cps.leading_zeros() - 1;
+    1u64.checked_shl(v).unwrap_or(0)
+}
+
 fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
-    if wallet.idlecoin < 1024 && wallet.supercoin < 1 {
+    if connection.miner.cps < 1024 {
         connection
             .updates
-            .push("You need at least 1024 idlecoin to be able to purchase boost\n".to_string());
+            .push("You need at least 1024 Cps to be able to purchase boost\n".to_string());
         return 0;
     }
-    let cost = 1024u64;
+    let cost = boost_cost(connection.miner.cps);
+    if wallet.idlecoin < cost && wallet.supercoin == 0 {
+        connection
+            .updates
+            .push("You do not have the funds to purchase boost\n".to_string());
+        return 0;
+    }
     let boost = 128u64;
     miner::sub_idlecoins(wallet, cost);
     connection.miner.boost = connection.miner.boost.saturating_add(boost);
 
-    1024
+    cost
 }
 
 fn buy_miner(connection: &mut Connection, mut wallet: &mut Wallet) -> u64 {
