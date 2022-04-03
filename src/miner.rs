@@ -74,10 +74,6 @@ pub fn action_miners(
         }
     }
 
-    if msg.len() > 5 {
-        msg.resize(5, "".to_owned());
-    };
-
     drop(cons);
 }
 
