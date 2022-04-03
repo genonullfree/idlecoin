@@ -292,7 +292,7 @@ fn print_wallets(
         let mut num = 0;
         for c in cons.iter_mut() {
             if c.miner.wallet_id == g.id {
-                // List purchases that can be made
+                // Build purchase display
                 if g.idlecoin > 1024 || g.supercoin > 1 {
                     c.purchases = vec!["Commands:\n".to_string()];
                     if c.miner.cps > 1024 {
@@ -369,7 +369,7 @@ fn print_wallets(
 
         if !min.is_empty() {
             msg += wal;
-            msg += "  [*] Miners\n";
+            msg += "  [*] Miners:\n";
             msg += &min;
         }
     }

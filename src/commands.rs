@@ -100,7 +100,9 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
         return 0;
     }
     if connection.miner.boost > u16::MAX as u64 {
-        connection.updates.push("You cannot purchase any more boost right now\n".to_string());
+        connection
+            .updates
+            .push("You cannot purchase any more boost right now\n".to_string());
         return 0;
     }
     let cost = boost_cost(connection.miner.cps);
