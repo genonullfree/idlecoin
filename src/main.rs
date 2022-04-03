@@ -24,6 +24,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
+const ABS_MAX_MINERS: u64 = 25;
 const IDLECOIN: &str = r"
 
  /$$       /$$ /$$                               /$$
@@ -131,7 +132,11 @@ fn main() -> Result<(), Error> {
                 }
             };
 
-            let updates = vec![format!("\nLogged in as: 0x{:016x}\n", miner.wallet_id).to_owned()];
+            let updates = vec![format!(
+                "\nLogged in as Wallet: 0x{:016x} Miner: 0x{:08x}\n",
+                miner.wallet_id, miner.miner_id
+            )
+            .to_owned()];
             let conn = Connection {
                 miner,
                 stream: s,
@@ -298,13 +303,12 @@ fn print_wallets(
                             .to_string(),
                         );
                     }
-                    if g.max_miners != 10
-                        && (g.idlecoin > (u64::MAX / (100000 >> (g.max_miners - 5)))
-                            || g.supercoin > 1)
+                    let miner_cost = commands::miner_cost(g.max_miners);
+                    if g.max_miners < ABS_MAX_MINERS && (g.idlecoin > miner_cost || g.supercoin > 1)
                     {
                         c.purchases.push(format!(
                             "'m'<enter>\tPurchase 1 Miner License for {} idlecoin\n",
-                            u64::MAX / (100000 >> (g.max_miners - 5))
+                            miner_cost
                         ));
                     }
                 }

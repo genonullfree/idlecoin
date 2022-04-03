@@ -113,15 +113,23 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
     cost
 }
 
+pub fn miner_cost(max_miners: u64) -> u64 {
+    if max_miners < 5 {
+        u64::MAX
+    } else {
+        u64::MAX / (0x100000 >> (max_miners - 5))
+    }
+}
+
 fn buy_miner(connection: &mut Connection, mut wallet: &mut Wallet) -> u64 {
-    if wallet.max_miners >= 10 {
+    if wallet.max_miners >= ABS_MAX_MINERS {
         connection
             .updates
             .push("You cannot purchase any more miners\n".to_string());
         return 0;
     }
 
-    let cost = u64::MAX / (100000 >> (wallet.max_miners - 5));
+    let cost = miner_cost(wallet.max_miners);
     if wallet.idlecoin > cost || wallet.supercoin > 0 {
         miner::sub_idlecoins(wallet, cost);
         wallet.max_miners += 1;
