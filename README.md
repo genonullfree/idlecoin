@@ -31,22 +31,31 @@ The stats are written out to a file `.idlecoin` in the working directory of the 
 ## Output
 
 ```
-[004] Wallet 0xe7299d9f952a6c31 Coins: 0:16324
-    [+] Miner 0x91e5e95a Cps: 603 Level: 2
-[003] Wallet 0xe8b26b26f8b447f9 Coins: 0:58426
-    [+] Miner 0xedadbfe7 Cps: 342 Level: 2
-[001] Wallet 0x7d3ce1ed74b2c05f Coins: 0:261941
-    [+] Miner 0x3b7c1ffb Cps: 430 Level: 2
-    [+] Miner 0x2c37118e Cps: 546 Level: 3
+[004] Wallet 0x5bd33994fa398d38 Coins: 0:90077 Miner Licenses: 5 Total Cps: 952
+  [*] Miners:
+          0xa0cd3980
+             952 Cps
+              0B  2L
+[002] Wallet 0xc5bef0bd52e469b7 Coins: 0:4969441343 Miner Licenses: 5 Total Cps: 2742
+  [*] Miners:
+          0x3e83596c           0xbeb5504f           0x97d8c768
+             916 Cps              916 Cps              910 Cps
+              0B  2L               0B  2L               0B  2L
+[001] Wallet 0x7d3ce1ed74b2c05f Coins: 455111110:4595128692089938046 Miner Licenses: 25 Total Cps: 7730
+  [*] Miners:
+          0x876be1c6           0xcca76078           0x64031bd5           0x50867202           0xe2c5a51f
+            1260 Cps             1110 Cps             1100 Cps             1090 Cps             1090 Cps
+           1914B  3L               0B  3L               0B  3L               0B  3L               0B  3L
+          0x5afa7dd7           0x2917f60b
+            1070 Cps             1010 Cps
+              0B  3L               0B  3L
 
 Events:
- [!] Miner 0x91e5e95a gained 10% CPS boost
- [!] Miner 0x2c37118e leveled up
- [!] Miner 0xedadbfe7 gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
+ [2022-04-03 09:41:12] Miner 0x876be1c6 bought 1920 boost seconds with 15360 idlecoin
 
-Logged in as: 0x7d3ce1ed74b2c05f%       
+Logged in as Wallet: 0x7d3ce1ed74b2c05f Miner: 0x876be1c6
+Commands:
+'b'<enter>      Purchase 128 boost for 1024 idlecoin
 ```
 
 The display is updated every second. Only Wallets with active miners will be displayed, but the rank number will be accurate for all Wallets on the server.
@@ -54,8 +63,10 @@ The display is updated every second. Only Wallets with active miners will be dis
 ### Wallet
 
 ```
-[002] Wallet 0xe8b26b26f8b447f9 Coins: 0:58426
-^            ^                         ^
+[002] Wallet 0xc5bef0bd52e469b7 Coins: 0:4969441343 Miner Licenses: 5 Total Cps: 2742
+^            ^                         ^                            ^            ^
+|            |                         |                            |            Total amount of Cps for all Miners
+|            |                         |                            Max Number of Miners for Wallet
 |            |                         Supercoins:Idlecoins
 |            Unique Wallet ID
 Rank number
@@ -64,11 +75,12 @@ Rank number
 ### Miners
 
 ```
-    [+] Miner 0x2c37118e Cps: 546 Level: 3
-              ^               ^          ^
-              |               |          Miner level
-              |               Miner Coins-Per-Second
-              Unique Miner ID
+  [*] Miners:
+          0x876be1c6    <- Unique Miner ID
+            1260 Cps    <- Miner Coins-Per-Second
+           1914B  3L    <- Miner level
+           ^
+           Boost seconds
 ```
 
 Each wallet supports at least 5 miners.
@@ -77,20 +89,17 @@ Each wallet supports at least 5 miners.
 
 ```
 Events:
- [!] Miner 0x91e5e95a gained 10% CPS boost
- [!] Miner 0x2c37118e leveled up
- [!] Miner 0xedadbfe7 gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
+ [2022-04-03 09:41:12] Miner 0x876be1c6 bought 1920 boost seconds with 15360 idlecoin
 ```
 
 These events are newest on top, and only the most recent 5 are displayed.
 
-These events are special random events that can happen:
+These events can be a mix of users purchasing upgrades for their miners or special random events that can happen:
 
 1. Gain 10% CPS -- 0.01% chance
 1. Gain 1 Level -- 0.02% chance
 1. Lose 1 Level -- 0.01% chance
+1. IRS auditing -- 0.00000006430041152263% chance
 
 
 ## Auto-Login
