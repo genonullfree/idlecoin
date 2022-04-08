@@ -286,9 +286,7 @@ fn print_wallets(
     for (i, g) in gens.iter().enumerate() {
         let mut min = String::new();
         let mut total_cps = 0u128;
-        let mut miner_top: Vec<String> = vec![];
-        let mut miner_mid: Vec<String> = vec![];
-        let mut miner_bot: Vec<String> = vec![];
+        let mut miner_line: Vec<String> = vec!["  ".to_string()];
         let mut num = 0;
         for c in cons.iter_mut() {
             if c.miner.wallet_id == g.id {
@@ -315,42 +313,27 @@ fn print_wallets(
                 }
 
                 // Build miner display
-                miner_top.push(format!("{:>11}x{:0>8x} ", 0, c.miner.miner_id,).to_owned());
-                miner_mid.push(format!("{:>16} Cps ", c.miner.cps,).to_owned());
-                miner_bot
-                    .push(format!("{:>15}B {:>2}L ", c.miner.boost, c.miner.level,).to_owned());
+                miner_line.push(
+                    format!(
+                        "[M:{:#08x} {:>5}Cps {:>5}B {:>2}L] ",
+                        c.miner.miner_id, c.miner.cps, c.miner.boost, c.miner.level
+                    )
+                    .to_owned(),
+                );
                 total_cps += c.miner.cps as u128;
                 num += 1;
-                if num > 4 {
-                    for i in &miner_top {
-                        min += i;
-                    }
-                    min += "\n";
-                    for i in &miner_mid {
-                        min += i;
-                    }
-                    min += "\n";
-                    for i in &miner_bot {
+                if num > 3 {
+                    for i in &miner_line {
                         min += i;
                     }
                     min += "\n";
                     num = 0;
-                    miner_top = vec![];
-                    miner_mid = vec![];
-                    miner_bot = vec![];
+                    miner_line = vec!["  ".to_string()];
                 }
             }
         }
         if num > 0 {
-            for i in &miner_top {
-                min += i;
-            }
-            min += "\n";
-            for i in &miner_mid {
-                min += i;
-            }
-            min += "\n";
-            for i in &miner_bot {
+            for i in &miner_line {
                 min += i;
             }
             min += "\n";
@@ -384,7 +367,7 @@ fn format_msg(input: &mut String, actions: &mut Vec<String>) {
         return;
     }
 
-    input.push_str(&"\nEvents:\n".to_string());
+    input.push_str("\nEvents:\n");
 
     if actions.len() > ABS_MAX_EVENTS {
         actions.resize(ABS_MAX_EVENTS, "".to_owned());
