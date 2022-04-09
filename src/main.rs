@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::hash::Hasher;
+use std::io;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
@@ -84,12 +85,33 @@ fn main() -> Result<(), Error> {
     let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT)))?;
 
     let mut signals = Signals::new(&[SIGINT]).unwrap();
-    let wallets_save = Arc::clone(&wallets);
+    let wallets_exit = Arc::clone(&wallets);
+    let conns_exit = Arc::clone(&connections);
     thread::spawn(move || {
         for sig in signals.forever() {
             if sig == SIGINT {
+                // On Ctrl-C, enter a shutdown message
+                print!("\rEnter a shutdown message: ");
+                io::stdout().flush().unwrap();
+                let stdin = io::stdin();
+                let input = &mut String::new();
+                stdin.read_line(input).unwrap();
+
+                // Print message locally
+                let t: DateTime<Local> = Local::now();
+                print!("[!] Shutdown message at {t}: {input}");
+
+                // Lock the connections, and hold lock until exit so no updates can be made to the miners
+                let mut cons = conns_exit.lock().unwrap();
+                for c in cons.iter_mut() {
+                    // Send out the shutdown message to all connected miners
+                    if c.stream.write_all(format!("{}{}v{}\n\n[!] The Idlecoin server is shutting down.\nTimestamp: {}\nMessage: {}", CLR, IDLECOIN, VERSION, t, input).as_bytes()).is_ok() {}
+                }
+
                 // Save the current stats file
-                file::save_stats(&wallets_save);
+                file::save_stats(&wallets_exit);
+
+                // Exit idlecoin
                 std::process::exit(0);
             }
         }
