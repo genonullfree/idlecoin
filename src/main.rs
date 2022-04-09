@@ -26,7 +26,7 @@ const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
 const AUTOSAVE: usize = 300;
-const ABS_MAX_MINERS: u64 = 25;
+const ABS_MAX_MINERS: u64 = 12;
 const ABS_MAX_EVENTS: usize = 5;
 const IDLECOIN: &str = r"
 
