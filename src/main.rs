@@ -315,8 +315,11 @@ fn print_wallets(
                 // Build miner display
                 miner_line.push(
                     format!(
-                        "[M:{:#08x} {:>5}Cps {:>5}B {:>2}L] ",
-                        c.miner.miner_id, c.miner.cps, c.miner.boost, c.miner.level
+                        "[M:0x{:0>8x} Cps:{} B:{} L:{:<2}] ",
+                        c.miner.miner_id,
+                        disp_units(c.miner.cps),
+                        disp_units(c.miner.boost),
+                        c.miner.level
                     )
                     .to_owned(),
                 );
@@ -360,6 +363,27 @@ fn print_wallets(
     drop(gens);
 
     msg
+}
+
+fn disp_units(num: u64) -> String {
+    let unit = [' ', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+    let mut value = num as f64;
+
+    let mut count = 0;
+    loop {
+        if (value / 1000.0) > 1.0 {
+            count += 1;
+            value /= 1000.0;
+        } else {
+            break;
+        }
+        if count == unit.len() - 1 {
+            break;
+        }
+    }
+
+    let n = if count > 0 { 1 } else { 0 };
+    format!("{:<5.*}{:>1}", n, value, unit[count])
 }
 
 fn format_msg(input: &mut String, actions: &mut Vec<String>) {
