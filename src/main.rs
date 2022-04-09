@@ -327,7 +327,7 @@ fn print_wallets(
                     if c.miner.cps > 1024 {
                         c.purchases.push(
                             format!(
-                                "'b'<enter>\tPurchase 128 boost for {} idlecoin\n",
+                                "'b'<enter>\tPurchase 128 seconds of Miner Boost for {} idlecoin\n",
                                 commands::boost_cost(c.miner.cps)
                             )
                             .to_string(),

@@ -26,36 +26,24 @@ nc 127.0.0.1 7654
 telnet localhost 7654
 ```
 
-The stats are written out to a file `.idlecoin` in the working directory of the server upon exit. On start, `idlecoin` will attempt to open `.idlecoin` and ingest the stats file to allow loading of previous stats.
+The stats are written out to a file `.idlecoin` in the working directory of the server upon exit. On start, `idlecoin` will attempt to open `.idlecoin` and ingest the stats file to allow loading of previous stats. The stats file will currently autosave every 5 minutes.
 
 ## Output
 
 ```
-[004] Wallet 0x5bd33994fa398d38 Coins: 0:90077 Miner Licenses: 5 Total Cps: 952
+[012] Wallet 0xd259fac86ad34f98 Coins: 0:3543 Miner Licenses: 5 Total Cps: 280
   [*] Miners:
-          0xa0cd3980
-             952 Cps
-              0B  2L
-[002] Wallet 0xc5bef0bd52e469b7 Coins: 0:4969441343 Miner Licenses: 5 Total Cps: 2742
+  [M:0x4768b820 Cps:73     B:0      L:1 ] [M:0x19b1eb90 Cps:70     B:0      L:1 ] [M:0x5af31ad8 Cps:70     B:0      L:1 ] [M:0xdfac45f1 Cps:67     B:0      L:1 ]
+[001] Wallet 0x7d3ce1ed74b2c05f Coins: 455111110:4595339597215277250 Miner Licenses: 25 Total Cps: 1493
   [*] Miners:
-          0x3e83596c           0xbeb5504f           0x97d8c768
-             916 Cps              916 Cps              910 Cps
-              0B  2L               0B  2L               0B  2L
-[001] Wallet 0x7d3ce1ed74b2c05f Coins: 455111110:4595128692089938046 Miner Licenses: 25 Total Cps: 7730
-  [*] Miners:
-          0x876be1c6           0xcca76078           0x64031bd5           0x50867202           0xe2c5a51f
-            1260 Cps             1110 Cps             1100 Cps             1090 Cps             1090 Cps
-           1914B  3L               0B  3L               0B  3L               0B  3L               0B  3L
-          0x5afa7dd7           0x2917f60b
-            1070 Cps             1010 Cps
-              0B  3L               0B  3L
+  [M:0x566369be Cps:124    B:0      L:2 ] [M:0xa7f6aa75 Cps:118.1K B:1920   L:12] [M:0x7b104097 Cps:118    B:0      L:2 ] [M:0x81599875 Cps:118    B:0      L:2 ]
+  [M:0x05d175f8 Cps:118    B:0      L:2 ] [M:0x7107c253 Cps:112    B:0      L:2 ] [M:0x932c39cf Cps:112    B:0      L:2 ] [M:0xb21f74cf Cps:112    B:0      L:2 ]
+  [M:0x6bb92dd6 Cps:106    B:0      L:2 ] [M:0x7a55897f Cps:106    B:0      L:2 ] [M:0xfbef289d Cps:106    B:0      L:2 ] [M:0xacbf46a9 Cps:100    B:0      L:1 ]
+  [M:0x5b0f4b06 Cps:94     B:0      L:1 ] [M:0x7cd638c2 Cps:49     B:0      L:1 ]
 
+Logged in as Wallet: 0x7d3ce1ed74b2c05f Miner: 0x7cd638c2
 Events:
- [2022-04-03 09:41:12] Miner 0x876be1c6 bought 1920 boost seconds with 15360 idlecoin
-
-Logged in as Wallet: 0x7d3ce1ed74b2c05f Miner: 0x876be1c6
-Commands:
-'b'<enter>      Purchase 128 boost for 1024 idlecoin
+ [2022-04-03 09:41:12] Miner 0xa7f6aa75 bought 1920 boost seconds with 15360 idlecoin
 ```
 
 The display is updated every second. Only Wallets with active miners will be displayed, but the rank number will be accurate for all Wallets on the server.
@@ -76,14 +64,15 @@ Rank number
 
 ```
   [*] Miners:
-          0x876be1c6    <- Unique Miner ID
-            1260 Cps    <- Miner Coins-Per-Second
-           1914B  3L    <- Miner level
-           ^
-           Boost seconds
+  [M:0xa7f6aa75 Cps:118.1K B:1920   L:12]
+     ^              ^        ^        ^
+     |              |        |        Miner level
+     |              |        Boost seconds
+     |              Miner Coins-Per-Second
+     Unique Miner ID
 ```
 
-Each wallet supports at least 5 miners.
+Each wallet supports at least 5 miners, with options to purchase more once the wallet has enough to purchase additional licenses.
 
 ### Events
 
