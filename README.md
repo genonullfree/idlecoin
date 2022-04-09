@@ -26,27 +26,24 @@ nc 127.0.0.1 7654
 telnet localhost 7654
 ```
 
-The stats are written out to a file `.idlecoin` in the working directory of the server upon exit. On start, `idlecoin` will attempt to open `.idlecoin` and ingest the stats file to allow loading of previous stats.
+The stats are written out to a file `.idlecoin` in the working directory of the server upon exit. On start, `idlecoin` will attempt to open `.idlecoin` and ingest the stats file to allow loading of previous stats. The stats file will currently autosave every 5 minutes.
 
 ## Output
 
 ```
-[004] Wallet 0xe7299d9f952a6c31 Coins: 0:16324
-    [+] Miner 0x91e5e95a Cps: 603 Level: 2
-[003] Wallet 0xe8b26b26f8b447f9 Coins: 0:58426
-    [+] Miner 0xedadbfe7 Cps: 342 Level: 2
-[001] Wallet 0x7d3ce1ed74b2c05f Coins: 0:261941
-    [+] Miner 0x3b7c1ffb Cps: 430 Level: 2
-    [+] Miner 0x2c37118e Cps: 546 Level: 3
+[012] Wallet 0xd259fac86ad34f98 Coins: 0:3543 Miner Licenses: 5 Total Cps: 280
+  [*] Miners:
+  [M:0x4768b820 Cps:73     B:0      L:1 ] [M:0x19b1eb90 Cps:70     B:0      L:1 ] [M:0x5af31ad8 Cps:70     B:0      L:1 ] [M:0xdfac45f1 Cps:67     B:0      L:1 ]
+[001] Wallet 0x7d3ce1ed74b2c05f Coins: 455111110:4595339597215277250 Miner Licenses: 25 Total Cps: 1493
+  [*] Miners:
+  [M:0x566369be Cps:124    B:0      L:2 ] [M:0xa7f6aa75 Cps:118.1K B:1920   L:12] [M:0x7b104097 Cps:118    B:0      L:2 ] [M:0x81599875 Cps:118    B:0      L:2 ]
+  [M:0x05d175f8 Cps:118    B:0      L:2 ] [M:0x7107c253 Cps:112    B:0      L:2 ] [M:0x932c39cf Cps:112    B:0      L:2 ] [M:0xb21f74cf Cps:112    B:0      L:2 ]
+  [M:0x6bb92dd6 Cps:106    B:0      L:2 ] [M:0x7a55897f Cps:106    B:0      L:2 ] [M:0xfbef289d Cps:106    B:0      L:2 ] [M:0xacbf46a9 Cps:100    B:0      L:1 ]
+  [M:0x5b0f4b06 Cps:94     B:0      L:1 ] [M:0x7cd638c2 Cps:49     B:0      L:1 ]
 
+Logged in as Wallet: 0x7d3ce1ed74b2c05f Miner: 0x7cd638c2
 Events:
- [!] Miner 0x91e5e95a gained 10% CPS boost
- [!] Miner 0x2c37118e leveled up
- [!] Miner 0xedadbfe7 gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
-
-Logged in as: 0x7d3ce1ed74b2c05f%       
+ [2022-04-03 09:41:12] Miner 0xa7f6aa75 bought 1920 boost seconds with 15360 idlecoin
 ```
 
 The display is updated every second. Only Wallets with active miners will be displayed, but the rank number will be accurate for all Wallets on the server.
@@ -54,8 +51,10 @@ The display is updated every second. Only Wallets with active miners will be dis
 ### Wallet
 
 ```
-[002] Wallet 0xe8b26b26f8b447f9 Coins: 0:58426
-^            ^                         ^
+[002] Wallet 0xc5bef0bd52e469b7 Coins: 0:4969441343 Miner Licenses: 5 Total Cps: 2742
+^            ^                         ^                            ^            ^
+|            |                         |                            |            Total amount of Cps for all Miners
+|            |                         |                            Max Number of Miners for Wallet
 |            |                         Supercoins:Idlecoins
 |            Unique Wallet ID
 Rank number
@@ -64,33 +63,32 @@ Rank number
 ### Miners
 
 ```
-    [+] Miner 0x2c37118e Cps: 546 Level: 3
-              ^               ^          ^
-              |               |          Miner level
-              |               Miner Coins-Per-Second
-              Unique Miner ID
+  [*] Miners:
+  [M:0xa7f6aa75 Cps:118.1K B:1920   L:12]
+     ^              ^        ^        ^
+     |              |        |        Miner level
+     |              |        Boost seconds
+     |              Miner Coins-Per-Second
+     Unique Miner ID
 ```
 
-Each wallet supports at least 5 miners.
+Each wallet supports at least 5 miners, with options to purchase more once the wallet has enough to purchase additional licenses.
 
 ### Events
 
 ```
 Events:
- [!] Miner 0x91e5e95a gained 10% CPS boost
- [!] Miner 0x2c37118e leveled up
- [!] Miner 0xedadbfe7 gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
- [!] Miner 0x2c37118e gained 10% CPS boost
+ [2022-04-03 09:41:12] Miner 0x876be1c6 bought 1920 boost seconds with 15360 idlecoin
 ```
 
 These events are newest on top, and only the most recent 5 are displayed.
 
-These events are special random events that can happen:
+These events can be a mix of users purchasing upgrades for their miners or special random events that can happen:
 
 1. Gain 10% CPS -- 0.01% chance
 1. Gain 1 Level -- 0.02% chance
 1. Lose 1 Level -- 0.01% chance
+1. IRS auditing -- 0.00000006430041152263% chance
 
 
 ## Auto-Login

@@ -37,7 +37,7 @@ pub fn load_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn save_stats(wallets: Arc<Mutex<Vec<Wallet>>>) {
+pub fn save_stats(wallets: &Arc<Mutex<Vec<Wallet>>>) {
     // Serialize the stats data to json
     println!("Saving stats...");
     let gens = wallets.lock().unwrap();

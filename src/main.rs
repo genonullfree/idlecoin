@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::hash::Hasher;
+use std::io;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
@@ -24,6 +25,9 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
+const AUTOSAVE: usize = 300;
+const ABS_MAX_MINERS: u64 = 12;
+const ABS_MAX_EVENTS: usize = 5;
 const IDLECOIN: &str = r"
 
  /$$       /$$ /$$                               /$$
@@ -81,12 +85,33 @@ fn main() -> Result<(), Error> {
     let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, PORT)))?;
 
     let mut signals = Signals::new(&[SIGINT]).unwrap();
-    let wallets_save = Arc::clone(&wallets);
+    let wallets_exit = Arc::clone(&wallets);
+    let conns_exit = Arc::clone(&connections);
     thread::spawn(move || {
         for sig in signals.forever() {
             if sig == SIGINT {
+                // On Ctrl-C, enter a shutdown message
+                print!("\rEnter a shutdown message: ");
+                io::stdout().flush().unwrap();
+                let stdin = io::stdin();
+                let input = &mut String::new();
+                stdin.read_line(input).unwrap();
+
+                // Print message locally
+                let t: DateTime<Local> = Local::now();
+                print!("[!] Shutdown message at {t}: {input}");
+
+                // Lock the connections, and hold lock until exit so no updates can be made to the miners
+                let mut cons = conns_exit.lock().unwrap();
+                for c in cons.iter_mut() {
+                    // Send out the shutdown message to all connected miners
+                    if c.stream.write_all(format!("{}{}v{}\n\n[!] The Idlecoin server is shutting down.\nTimestamp: {}\nMessage: {}", CLR, IDLECOIN, VERSION, t, input).as_bytes()).is_ok() {}
+                }
+
                 // Save the current stats file
-                file::save_stats(wallets_save);
+                file::save_stats(&wallets_exit);
+
+                // Exit idlecoin
                 std::process::exit(0);
             }
         }
@@ -131,7 +156,11 @@ fn main() -> Result<(), Error> {
                 }
             };
 
-            let updates = vec![format!("\nLogged in as: 0x{:016x}\n", miner.wallet_id).to_owned()];
+            let updates = vec![format!(
+                "\nLogged in as Wallet: 0x{:016x} Miner: 0x{:08x}\n",
+                miner.wallet_id, miner.miner_id
+            )
+            .to_owned()];
             let conn = Connection {
                 miner,
                 stream: s,
@@ -147,6 +176,7 @@ fn main() -> Result<(), Error> {
 
     // Main loop
     let mut action_updates = Vec::<String>::new();
+    let mut counter = AUTOSAVE;
     loop {
         commands::read_inputs(&connections, &wallets, &mut action_updates);
 
@@ -160,13 +190,20 @@ fn main() -> Result<(), Error> {
         miner::action_miners(&connections, &wallets, &mut action_updates);
 
         // Format the update messages
-        format_msg(&mut msg, &action_updates);
+        format_msg(&mut msg, &mut action_updates);
 
         // Send wallet updates to all connections every 2 seconds
         send_updates_to_all(msg, &connections);
 
         // Sleep from all that hard work
         sleep(Duration::from_secs(1));
+
+        // Autosave every so often
+        counter -= 1;
+        if counter == 0 {
+            file::save_stats(&wallets);
+            counter = AUTOSAVE;
+        }
     }
 }
 
@@ -280,72 +317,57 @@ fn print_wallets(
     for (i, g) in gens.iter().enumerate() {
         let mut min = String::new();
         let mut total_cps = 0u128;
-        let mut miner_top: Vec<String> = vec![];
-        let mut miner_mid: Vec<String> = vec![];
-        let mut miner_bot: Vec<String> = vec![];
+        let mut miner_line: Vec<String> = vec!["  ".to_string()];
         let mut num = 0;
         for c in cons.iter_mut() {
             if c.miner.wallet_id == g.id {
-                // List purchases that can be made
+                // Build purchase display
                 if g.idlecoin > 1024 || g.supercoin > 1 {
                     c.purchases = vec!["Commands:\n".to_string()];
                     if c.miner.cps > 1024 {
                         c.purchases.push(
                             format!(
-                                "'b'<enter>\tPurchase 128 boost for {} idlecoin\n",
+                                "'b'<enter>\tPurchase 128 seconds of Miner Boost for {} idlecoin\n",
                                 commands::boost_cost(c.miner.cps)
                             )
                             .to_string(),
                         );
                     }
-                    if g.max_miners != 10
-                        && (g.idlecoin > (u64::MAX / (100000 >> (g.max_miners - 5)))
-                            || g.supercoin > 1)
+                    let miner_cost = commands::miner_cost(g.max_miners);
+                    if g.max_miners < ABS_MAX_MINERS && (g.idlecoin > miner_cost || g.supercoin > 1)
                     {
                         c.purchases.push(format!(
                             "'m'<enter>\tPurchase 1 Miner License for {} idlecoin\n",
-                            u64::MAX / (100000 >> (g.max_miners - 5))
+                            miner_cost
                         ));
                     }
                 }
 
                 // Build miner display
-                miner_top.push(format!("{:>11}x{:0>8x} ", 0, c.miner.miner_id,).to_owned());
-                miner_mid.push(format!("{:>16} Cps ", c.miner.cps,).to_owned());
-                miner_bot
-                    .push(format!("{:>15}B {:>2}L ", c.miner.boost, c.miner.level,).to_owned());
+                miner_line.push(
+                    format!(
+                        "[M:0x{:0>8x} Cps:{} B:{} L:{:<2}] ",
+                        c.miner.miner_id,
+                        disp_units(c.miner.cps),
+                        disp_units(c.miner.boost),
+                        c.miner.level
+                    )
+                    .to_owned(),
+                );
                 total_cps += c.miner.cps as u128;
                 num += 1;
-                if num > 4 {
-                    for i in &miner_top {
-                        min += i;
-                    }
-                    min += "\n";
-                    for i in &miner_mid {
-                        min += i;
-                    }
-                    min += "\n";
-                    for i in &miner_bot {
+                if num > 3 {
+                    for i in &miner_line {
                         min += i;
                     }
                     min += "\n";
                     num = 0;
-                    miner_top = vec![];
-                    miner_mid = vec![];
-                    miner_bot = vec![];
+                    miner_line = vec!["  ".to_string()];
                 }
             }
         }
         if num > 0 {
-            for i in &miner_top {
-                min += i;
-            }
-            min += "\n";
-            for i in &miner_mid {
-                min += i;
-            }
-            min += "\n";
-            for i in &miner_bot {
+            for i in &miner_line {
                 min += i;
             }
             min += "\n";
@@ -364,7 +386,7 @@ fn print_wallets(
 
         if !min.is_empty() {
             msg += wal;
-            msg += "  [*] Miners\n";
+            msg += "  [*] Miners:\n";
             msg += &min;
         }
     }
@@ -374,12 +396,37 @@ fn print_wallets(
     msg
 }
 
-fn format_msg(input: &mut String, actions: &[String]) {
+fn disp_units(num: u64) -> String {
+    let unit = [' ', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+    let mut value = num as f64;
+
+    let mut count = 0;
+    loop {
+        if (value / 1000.0) > 1.0 {
+            count += 1;
+            value /= 1000.0;
+        } else {
+            break;
+        }
+        if count == unit.len() - 1 {
+            break;
+        }
+    }
+
+    let n = if count > 0 { 1 } else { 0 };
+    format!("{:.*}{:>1}", n, value, unit[count])
+}
+
+fn format_msg(input: &mut String, actions: &mut Vec<String>) {
     if actions.is_empty() {
         return;
     }
 
-    input.push_str(&"\nEvents:\n".to_string());
+    input.push_str("\nEvents:\n");
+
+    if actions.len() > ABS_MAX_EVENTS {
+        actions.resize(ABS_MAX_EVENTS, "".to_owned());
+    };
 
     for a in actions {
         input.push_str(a);
