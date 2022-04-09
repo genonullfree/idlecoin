@@ -24,6 +24,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
+const AUTOSAVE: usize = 300;
 const ABS_MAX_MINERS: u64 = 25;
 const ABS_MAX_EVENTS: usize = 5;
 const IDLECOIN: &str = r"
@@ -88,7 +89,7 @@ fn main() -> Result<(), Error> {
         for sig in signals.forever() {
             if sig == SIGINT {
                 // Save the current stats file
-                file::save_stats(wallets_save);
+                file::save_stats(&wallets_save);
                 std::process::exit(0);
             }
         }
@@ -153,6 +154,7 @@ fn main() -> Result<(), Error> {
 
     // Main loop
     let mut action_updates = Vec::<String>::new();
+    let mut counter = AUTOSAVE;
     loop {
         commands::read_inputs(&connections, &wallets, &mut action_updates);
 
@@ -173,6 +175,13 @@ fn main() -> Result<(), Error> {
 
         // Sleep from all that hard work
         sleep(Duration::from_secs(1));
+
+        // Autosave every so often
+        counter -= 1;
+        if counter == 0 {
+            file::save_stats(&wallets);
+            counter = AUTOSAVE;
+        }
     }
 }
 
