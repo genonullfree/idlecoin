@@ -414,7 +414,7 @@ fn disp_units(num: u64) -> String {
     }
 
     let n = if count > 0 { 1 } else { 0 };
-    format!("{:<5.*}{:>1}", n, value, unit[count])
+    format!("{:.*}{:>1}", n, value, unit[count])
 }
 
 fn format_msg(input: &mut String, actions: &mut Vec<String>) {
