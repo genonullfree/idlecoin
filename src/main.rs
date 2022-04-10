@@ -190,6 +190,9 @@ fn main() -> Result<(), Error> {
         // Autosave every so often
         counter -= 1;
         if counter == 0 {
+            // Increment chronocoins for each live wallet
+            increment_rando(&connections, &wallets);
+
             file::save_stats(&wallets);
             counter = AUTOSAVE;
         }
@@ -279,10 +282,7 @@ fn login(
     Ok(Miner::new(wallet_id, miner_id))
 }
 
-fn increment_chrono(
-    connections: &Arc<Mutex<Vec<Connection>>>,
-    wallets: &Arc<Mutex<Vec<Wallet>>>,
-) {
+fn increment_chrono(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
     let mut gens = wallets.lock().unwrap();
     let cons = connections.lock().unwrap();
 
@@ -294,6 +294,34 @@ fn increment_chrono(
     for g in gens.iter_mut() {
         if live_wallets.contains_key(&g.id) {
             g.inc_chronocoins();
+        }
+    }
+}
+
+fn increment_rando(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
+    let mut gens = wallets.lock().unwrap();
+    let cons = connections.lock().unwrap();
+
+    let mut live_wallets = HashMap::new();
+    for c in cons.iter() {
+        live_wallets.insert(c.miner.wallet_id as u64, 1);
+    }
+
+    let mut rng = rand::thread_rng();
+    let random: usize = rng.gen();
+    let winner_pos = random % live_wallets.len();
+
+    let mut winner_id: u64 = 0;
+    for (i, (k, _)) in live_wallets.iter().enumerate() {
+        if i == winner_pos {
+            winner_id = *k;
+            break;
+        }
+    }
+
+    for w in gens.iter_mut() {
+        if w.id == winner_id {
+            w.inc_randocoins();
         }
     }
 }

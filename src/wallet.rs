@@ -56,4 +56,11 @@ impl Wallet {
             None => u64::MAX,
         }
     }
+
+    pub fn inc_randocoins(&mut self) {
+        self.chronocoin = match self.chronocoin.checked_add(16) {
+            Some(c) => c,
+            None => u64::MAX,
+        }
+    }
 }
