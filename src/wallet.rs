@@ -76,7 +76,7 @@ impl Wallet {
     }
 
     pub fn inc_randocoins(&mut self) {
-        self.chronocoin = self.chronocoin.saturating_add(16);
+        self.randocoin = self.randocoin.saturating_add(16);
     }
 
     pub fn sub_randocoins(&mut self, less: u64) -> Result<(), Error> {
