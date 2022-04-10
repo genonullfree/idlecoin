@@ -51,16 +51,26 @@ impl Wallet {
     }
 
     pub fn inc_chronocoins(&mut self) {
-        self.chronocoin = match self.chronocoin.checked_add(1) {
+        self.chronocoin = self.chronocoin.saturating_add(1);
+    }
+
+    pub fn sub_chronocoins(&mut self, less: u64) -> Result<(), Error> {
+        self.chronocoin = match self.chronocoin.checked_sub(less) {
             Some(c) => c,
-            None => u64::MAX,
-        }
+            None => return Err(Error::new(ErrorKind::InvalidData, "Not enough chronocoin")),
+        };
+        Ok(())
     }
 
     pub fn inc_randocoins(&mut self) {
-        self.chronocoin = match self.chronocoin.checked_add(16) {
+        self.chronocoin = self.chronocoin.saturating_add(16);
+    }
+
+    pub fn sub_randocoins(&mut self, less: u64) -> Result<(), Error> {
+        self.randocoin = match self.randocoin.checked_sub(less) {
             Some(c) => c,
-            None => u64::MAX,
-        }
+            None => return Err(Error::new(ErrorKind::InvalidData, "Not enough randocoin")),
+        };
+        Ok(())
     }
 }
