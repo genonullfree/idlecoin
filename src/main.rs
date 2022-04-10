@@ -299,13 +299,13 @@ fn increment_chrono(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mut
 }
 
 fn increment_rando(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
-    let mut gens = wallets.lock().unwrap();
-    let cons = connections.lock().unwrap();
-
     let mut live_wallets = HashMap::new();
+
+    let cons = connections.lock().unwrap();
     for c in cons.iter() {
         live_wallets.insert(c.miner.wallet_id as u64, 1);
     }
+    drop(cons);
 
     let mut rng = rand::thread_rng();
     let random: usize = rng.gen();
@@ -319,6 +319,9 @@ fn increment_rando(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mute
         }
     }
 
+    println!("[^] 0x{:016x} won 16 randocoins", winner_id);
+
+    let mut gens = wallets.lock().unwrap();
     for w in gens.iter_mut() {
         if w.id == winner_id {
             w.inc_randocoins();
@@ -400,15 +403,15 @@ fn print_wallets(
         }
 
         let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {} Chronocoin: {} Randocoin: {}\n",
+            "[{:03}] Wallet 0x{:016x} Miner Licenses: {} Chronocoin: {} Randocoin: {} Coins: {}:{} Total Cps: {}\n",
             gens.len() - i,
             g.id,
-            g.supercoin,
-            g.idlecoin,
             g.max_miners,
-            total_cps,
             g.chronocoin,
             g.randocoin,
+            g.supercoin,
+            g.idlecoin,
+            total_cps,
         )
         .to_owned();
 
@@ -416,6 +419,7 @@ fn print_wallets(
             msg += wal;
             msg += "  [*] Miners:\n";
             msg += &min;
+            msg += "\n";
         }
     }
     drop(cons);
