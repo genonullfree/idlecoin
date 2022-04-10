@@ -1,5 +1,16 @@
 use crate::*;
 
+#[derive(Copy, Clone, Debug)]
+pub struct Miner {
+    pub miner_id: u32,  // miner address ID
+    pub wallet_id: u64, // wallet address ID
+    pub level: u64,     // current level
+    pub cps: u64,       // coin-per-second
+    inc: u64,           // Incrementor value
+    pow: u64,           // Next level up value
+    pub boost: u64,     // Seconds of boosted cps
+}
+
 pub fn action_miners(
     connections: &Arc<Mutex<Vec<Connection>>>,
     wallets: &Arc<Mutex<Vec<Wallet>>>,
@@ -20,7 +31,9 @@ pub fn action_miners(
                 if w.id == c.miner.wallet_id {
                     w.supercoin -= w.supercoin.saturating_div(10);
                     let coins = w.idlecoin.saturating_div(10);
-                    sub_idlecoins(w, coins);
+                    if w.sub_idlecoins(coins).is_err() {
+                        continue;
+                    };
                     msg.insert(
                         0,
                         format!(
@@ -35,7 +48,7 @@ pub fn action_miners(
         } else if x % 10000 == 0 {
             // 0.01 % chance
             let level = c.miner.level;
-            dec_level(&mut c.miner);
+            c.miner.dec_level();
             if level != c.miner.level {
                 msg.insert(
                     0,
@@ -49,7 +62,7 @@ pub fn action_miners(
         } else if x % 10000 <= 2 {
             // 0.02 % chance
             let level = c.miner.level;
-            inc_level(&mut c.miner);
+            c.miner.inc_level();
             if level != c.miner.level {
                 msg.insert(
                     0,
@@ -90,7 +103,7 @@ pub fn process_miners(
         // Update appropriate wallet
         for w in wals.iter_mut() {
             if c.miner.wallet_id == w.id {
-                add_idlecoins(w, c.miner.cps);
+                w.add_idlecoins(c.miner.cps);
             }
         }
     }
@@ -98,53 +111,36 @@ pub fn process_miners(
     drop(cons);
 }
 
-fn inc_level(miner: &mut Miner) {
-    miner.level = miner.level.saturating_add(1);
-
-    miner.inc = miner.inc.saturating_add(miner.level);
-
-    miner.pow = miner.pow.saturating_mul(10);
-}
-
-fn dec_level(miner: &mut Miner) {
-    miner.level = miner.level.saturating_sub(1);
-
-    miner.inc = miner.inc.saturating_sub(miner.level);
-
-    miner.pow = miner.pow.saturating_div(10);
-}
-
-pub fn add_idlecoins(mut wallet: &mut Wallet, new: u64) {
-    wallet.idlecoin = match wallet.idlecoin.checked_add(new) {
-        Some(c) => c,
-        None => {
-            wallet.supercoin = wallet.supercoin.saturating_add(1);
-            let x: u128 = (u128::from(wallet.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
-            x as u64
+impl Miner {
+    pub fn new(wallet_id: u64, miner_id: u32) -> Miner {
+        Miner {
+            miner_id,
+            wallet_id,
+            level: 0,
+            cps: 0,
+            inc: 1,
+            pow: 10,
+            boost: 0,
         }
-    };
-}
+    }
 
-pub fn sub_idlecoins(mut wallet: &mut Wallet, less: u64) {
-    wallet.idlecoin = match wallet.idlecoin.checked_sub(less) {
-        Some(c) => c,
-        None => {
-            if wallet.supercoin > 0 {
-                wallet.supercoin = wallet.supercoin.saturating_sub(1);
-                (u128::from(u64::MAX) - u128::from(less) + u128::from(wallet.idlecoin))
-                    .try_into()
-                    .unwrap()
-            } else {
-                0
-            }
-        }
-    };
+    pub fn inc_level(&mut self) {
+        self.level = self.level.saturating_add(1);
+        self.inc = self.inc.saturating_add(self.level);
+        self.pow = self.pow.saturating_mul(10);
+    }
+
+    pub fn dec_level(&mut self) {
+        self.level = self.level.saturating_sub(1);
+        self.inc = self.inc.saturating_sub(self.level);
+        self.pow = self.pow.saturating_div(10);
+    }
 }
 
 pub fn miner_session(mut miner: &mut Miner) {
     // Level up
     if miner.cps >= miner.pow {
-        inc_level(miner);
+        miner.inc_level();
     }
 
     // Increment cps

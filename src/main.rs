@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hasher;
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -20,6 +21,10 @@ use xxhash_rust::xxh3;
 mod commands;
 mod file;
 mod miner;
+mod wallet;
+
+use crate::miner::*;
+use crate::wallet::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
@@ -43,25 +48,6 @@ const BANNER: &str = "
 Source: https://github.com/genonullfree/idlecoin
 
 Please enter your username: ";
-
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Wallet {
-    id: u64,         // wallet address ID
-    supercoin: u64,  // supercoin
-    idlecoin: u64,   // idlecoin
-    max_miners: u64, // max number of miners
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct Miner {
-    miner_id: u32,  // miner address ID
-    wallet_id: u64, // wallet address ID
-    level: u64,     // current level
-    cps: u64,       // coin-per-second
-    inc: u64,       // Incrementor value
-    pow: u64,       // Next level up value
-    boost: u64,     // Seconds of boosted cps
-}
 
 #[derive(Debug)]
 pub struct Connection {
@@ -139,10 +125,6 @@ fn main() -> Result<(), Error> {
                             Err(e) => println!("Failed to send: {e}"),
                         };
                     }
-                    match s.shutdown(Shutdown::Both) {
-                        Ok(_) => (),
-                        Err(e) => println!("Failed to shutdown: {e}"),
-                    };
                     continue;
                 }
             };
@@ -183,6 +165,9 @@ fn main() -> Result<(), Error> {
         // Calculate miner performance and update stats
         miner::process_miners(&connections, &wallets);
 
+        // Increment chronocoins for each live wallet
+        increment_chrono(&connections, &wallets);
+
         // Send updates to all connected miners
         let mut msg = print_wallets(&connections, &wallets);
 
@@ -201,6 +186,9 @@ fn main() -> Result<(), Error> {
         // Autosave every so often
         counter -= 1;
         if counter == 0 {
+            // Increment chronocoins for each live wallet
+            increment_rando(&connections, &wallets);
+
             file::save_stats(&wallets);
             counter = AUTOSAVE;
         }
@@ -245,12 +233,7 @@ fn login(
         }
     }
     if !found {
-        wals.push(Wallet {
-            id: wallet_id,
-            supercoin: 0,
-            idlecoin: 0,
-            max_miners,
-        });
+        wals.push(Wallet::new(wallet_id));
     }
     drop(wals);
 
@@ -292,15 +275,54 @@ fn login(
     );
 
     // Create new Miner
-    Ok(Miner {
-        miner_id,
-        wallet_id,
-        level: 0,
-        cps: 0,
-        inc: 1,
-        pow: 10,
-        boost: 0,
-    })
+    Ok(Miner::new(wallet_id, miner_id))
+}
+
+fn increment_chrono(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
+    let mut gens = wallets.lock().unwrap();
+    let cons = connections.lock().unwrap();
+
+    let mut live_wallets = HashMap::new();
+    for c in cons.iter() {
+        live_wallets.insert(c.miner.wallet_id, 1);
+    }
+
+    for g in gens.iter_mut() {
+        if live_wallets.contains_key(&g.id) {
+            g.inc_chronocoins();
+        }
+    }
+}
+
+fn increment_rando(connections: &Arc<Mutex<Vec<Connection>>>, wallets: &Arc<Mutex<Vec<Wallet>>>) {
+    let mut live_wallets = HashMap::new();
+
+    let cons = connections.lock().unwrap();
+    for c in cons.iter() {
+        live_wallets.insert(c.miner.wallet_id as u64, 1);
+    }
+    drop(cons);
+
+    let mut rng = rand::thread_rng();
+    let random: usize = rng.gen();
+    let winner_pos = random % live_wallets.len();
+
+    let mut winner_id: u64 = 0;
+    for (i, (k, _)) in live_wallets.iter().enumerate() {
+        if i == winner_pos {
+            winner_id = *k;
+            break;
+        }
+    }
+
+    println!("[^] 0x{:016x} won 16 randocoins", winner_id);
+
+    let mut gens = wallets.lock().unwrap();
+    for w in gens.iter_mut() {
+        if w.id == winner_id {
+            w.inc_randocoins();
+        }
+    }
 }
 
 fn print_wallets(
@@ -342,6 +364,9 @@ fn print_wallets(
                         ));
                     }
                 }
+                if g.chronocoin > commands::time_cost() {
+                    c.purchases.push(format!("'c'<enter>\tPurchase 60m of time travel for this miner for {} chronocoins\n", commands::time_cost()));
+                }
 
                 // Build miner display
                 miner_line.push(
@@ -374,12 +399,14 @@ fn print_wallets(
         }
 
         let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {}\n",
+            "[{:03}] Wallet 0x{:016x} Miner Licenses: {} Chronocoin: {} Randocoin: {} Coins: {}:{} Total Cps: {}\n",
             gens.len() - i,
             g.id,
+            g.max_miners,
+            g.chronocoin,
+            g.randocoin,
             g.supercoin,
             g.idlecoin,
-            g.max_miners,
             total_cps,
         )
         .to_owned();
@@ -388,6 +415,7 @@ fn print_wallets(
             msg += wal;
             msg += "  [*] Miners:\n";
             msg += &min;
+            msg += "\n";
         }
     }
     drop(cons);

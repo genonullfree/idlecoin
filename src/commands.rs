@@ -1,4 +1,18 @@
 use crate::*;
+use std::collections::HashMap;
+
+#[derive(PartialEq, Eq, Hash)]
+enum PurchaseType {
+    Boost,
+    Miner,
+    Chrono,
+}
+
+#[derive(Copy, Clone, PartialEq, Hash)]
+struct Purchase {
+    bought: usize,
+    cost: u128,
+}
 
 pub fn read_inputs(
     connections: &Arc<Mutex<Vec<Connection>>>,
@@ -14,6 +28,7 @@ pub fn read_inputs(
             Err(_) => continue,
         };
 
+        // Server terminal output
         if len > 0 {
             println!(
                 "> User: 0x{:016x} Miner 0x{:08x} sent: {:?} from: {:?}",
@@ -22,69 +37,116 @@ pub fn read_inputs(
                 &buf[..len],
                 c.stream
             );
+        } else {
+            continue;
         }
 
-        let mut new_boost = 0;
-        let mut new_boost_cost = 0u128;
-        let mut new_miners = 0;
-        let mut new_miners_cost = 0u128;
+        let mut upgrades = HashMap::new();
 
-        for i in buf[..len].iter() {
-            if *i == b'b' {
-                // Purchase boost
-                let mut wals = wallets.lock().unwrap();
-                for w in wals.iter_mut() {
-                    if w.id == c.miner.wallet_id {
-                        let cost = buy_boost(c, w);
-                        if cost > 0 {
-                            new_boost += 128;
-                            new_boost_cost += cost as u128;
-                        }
+        let mut wals = wallets.lock().unwrap();
+        for w in wals.iter_mut() {
+            if w.id == c.miner.wallet_id {
+                // Iterate through each char in the received buffer
+                'nextchar: for i in buf[..len].iter() {
+                    if *i == b'b' {
+                        // Purchase boost
+                        let cost = match buy_boost(c, w) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                c.updates.push(e.to_string());
+                                continue 'nextchar;
+                            }
+                        };
+                        let new = Purchase {
+                            bought: 128,
+                            cost: cost as u128,
+                        };
+                        update_upgrade_list(&mut upgrades, PurchaseType::Boost, new);
+                    }
+                    if *i == b'm' {
+                        // Purchase miner licenses
+                        let cost = match buy_miner(w) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                c.updates.push(e.to_string());
+                                continue 'nextchar;
+                            }
+                        };
+                        let new = Purchase {
+                            bought: 1,
+                            cost: cost as u128,
+                        };
+                        update_upgrade_list(&mut upgrades, PurchaseType::Miner, new);
+                    }
+                    if *i == b'c' {
+                        // Purchase time travel
+                        let cost = match buy_time(c, w) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                c.updates.push(e.to_string());
+                                continue 'nextchar;
+                            }
+                        };
+                        let new = Purchase {
+                            bought: 1,
+                            cost: cost as u128,
+                        };
+                        update_upgrade_list(&mut upgrades, PurchaseType::Chrono, new);
                     }
                 }
-                drop(wals);
-            }
-            if *i == b'm' {
-                // Purchase miner licenses
-                let mut wals = wallets.lock().unwrap();
-                for w in wals.iter_mut() {
-                    if w.id == c.miner.wallet_id {
-                        let cost = buy_miner(c, w);
-                        if cost > 0 {
-                            new_miners += 1;
-                            new_miners_cost += cost as u128;
-                        }
-                    }
-                }
-                drop(wals);
             }
         }
-        let t: DateTime<Local> = Local::now();
-        if new_boost > 0 {
-            msg.insert(
-                0,
-                format!(
-                    " [{}] Miner 0x{:08x} bought {} boost seconds with {} idlecoin\n",
-                    t.format("%Y-%m-%d %H:%M:%S"),
-                    c.miner.miner_id,
-                    new_boost,
-                    new_boost_cost,
+
+        // Purchase notification updates
+        for (k, p) in upgrades.iter() {
+            let t: DateTime<Local> = Local::now();
+            match k {
+                PurchaseType::Boost => msg.insert(
+                    0,
+                    format!(
+                        " [{}] Miner 0x{:08x} bought {} boost seconds with {} idlecoin\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.miner_id,
+                        p.bought,
+                        p.cost,
+                    ),
                 ),
-            );
-        }
-        if new_miners > 0 {
-            msg.insert(
-                0,
-                format!(
-                    " [{}] Wallet 0x{:016x} bought new miner license(s) with {} idlecoin\n",
-                    t.format("%Y-%m-%d %H:%M:%S"),
-                    c.miner.wallet_id,
-                    new_miners_cost
+                PurchaseType::Miner => msg.insert(
+                    0,
+                    format!(
+                        " [{}] Wallet 0x{:016x} bought {} new miner license(s) with {} idlecoin\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.wallet_id,
+                        p.bought,
+                        p.cost,
+                    ),
                 ),
-            );
+                PurchaseType::Chrono => msg.insert(
+                    0,
+                    format!(" [{}] Miner 0x{:08x} travelled {} hours forward in time with {} chronocoins\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.wallet_id,
+                        p.bought,
+                        p.cost,
+                    )),
+            }
         }
     }
     drop(cons);
+}
+
+fn update_upgrade_list(
+    map: &mut HashMap<PurchaseType, Purchase>,
+    p_type: PurchaseType,
+    p: Purchase,
+) {
+    let mut node = match map.get(&p_type) {
+        Some(n) => *n,
+        None => Purchase { bought: 0, cost: 0 },
+    };
+    node.bought += p.bought;
+    node.cost += p.cost;
+    map.insert(p_type, node);
 }
 
 pub fn boost_cost(cps: u64) -> u64 {
@@ -92,31 +154,29 @@ pub fn boost_cost(cps: u64) -> u64 {
     1u64.checked_shl(v).unwrap_or(0)
 }
 
-fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
+fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Error> {
     if connection.miner.cps < 1024 {
-        connection
-            .updates
-            .push("You need at least 1024 Cps to be able to purchase boost\n".to_string());
-        return 0;
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You need at least 1024 Cps to be able to purchase boost\n",
+        ));
     }
     if connection.miner.boost > u16::MAX as u64 {
-        connection
-            .updates
-            .push("You cannot purchase any more boost right now\n".to_string());
-        return 0;
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You cannot purchase any more boost right now\n",
+        ));
     }
     let cost = boost_cost(connection.miner.cps);
-    if wallet.idlecoin < cost && wallet.supercoin == 0 {
-        connection
-            .updates
-            .push("You do not have the funds to purchase boost\n".to_string());
-        return 0;
+    if wallet.sub_idlecoins(cost).is_err() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You do not have the funds to purchase boost\n",
+        ));
     }
-    let boost = 128u64;
-    miner::sub_idlecoins(wallet, cost);
-    connection.miner.boost = connection.miner.boost.saturating_add(boost);
+    connection.miner.boost = connection.miner.boost.saturating_add(128);
 
-    cost
+    Ok(cost)
 }
 
 pub fn miner_cost(max_miners: u64) -> u64 {
@@ -127,19 +187,46 @@ pub fn miner_cost(max_miners: u64) -> u64 {
     }
 }
 
-fn buy_miner(connection: &mut Connection, mut wallet: &mut Wallet) -> u64 {
+fn buy_miner(mut wallet: &mut Wallet) -> Result<u64, Error> {
     if wallet.max_miners >= ABS_MAX_MINERS {
-        connection
-            .updates
-            .push("You cannot purchase any more miners\n".to_string());
-        return 0;
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You cannot purchase any more miners\n",
+        ));
     }
 
     let cost = miner_cost(wallet.max_miners);
-    if wallet.idlecoin > cost || wallet.supercoin > 0 {
-        miner::sub_idlecoins(wallet, cost);
-        wallet.max_miners += 1;
+    if wallet.sub_idlecoins(cost).is_err() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You do not have the funds to purchase a miner\n",
+        ));
+    };
+    wallet.max_miners += 1;
+
+    Ok(cost)
+}
+
+pub fn time_cost() -> u64 {
+    1000
+}
+
+fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Error> {
+    if wallet.sub_chronocoins(time_cost()).is_err() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You do not have the funds to purchase a time travel\n",
+        ));
     }
 
-    cost
+    let mut c = 60 * 60;
+    loop {
+        miner_session(&mut connection.miner);
+        c -= 1;
+        if c == 0 {
+            break;
+        }
+    }
+
+    Ok(time_cost())
 }
