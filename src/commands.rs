@@ -113,7 +113,7 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
         return 0;
     }
     let boost = 128u64;
-    miner::sub_idlecoins(wallet, cost);
+    wallet.sub_idlecoins(cost);
     connection.miner.boost = connection.miner.boost.saturating_add(boost);
 
     cost
@@ -137,7 +137,7 @@ fn buy_miner(connection: &mut Connection, mut wallet: &mut Wallet) -> u64 {
 
     let cost = miner_cost(wallet.max_miners);
     if wallet.idlecoin > cost || wallet.supercoin > 0 {
-        miner::sub_idlecoins(wallet, cost);
+        wallet.sub_idlecoins(cost);
         wallet.max_miners += 1;
     }
 
