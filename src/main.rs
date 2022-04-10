@@ -5,7 +5,7 @@ use std::io;
 use std::io::{Error, ErrorKind};
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -125,10 +125,6 @@ fn main() -> Result<(), Error> {
                             Err(e) => println!("Failed to send: {e}"),
                         };
                     }
-                    match s.shutdown(Shutdown::Both) {
-                        Ok(_) => (),
-                        Err(e) => println!("Failed to shutdown: {e}"),
-                    };
                     continue;
                 }
             };
