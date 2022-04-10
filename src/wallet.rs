@@ -2,12 +2,25 @@ use crate::*;
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct Wallet {
-    pub id: u64,         // wallet address ID
-    pub supercoin: u64,  // supercoin
-    pub idlecoin: u64,   // idlecoin
+    pub id: u64, // wallet address ID
+    #[serde(default = "def_zero")]
+    pub supercoin: u64, // supercoin
+    #[serde(default = "def_zero")]
+    pub idlecoin: u64, // idlecoin
+    #[serde(default = "def_zero")]
     pub chronocoin: u64, // chronocoin
-    pub randocoin: u64,  // randocoin
+    #[serde(default = "def_zero")]
+    pub randocoin: u64, // randocoin
+    #[serde(default = "def_five")]
     pub max_miners: u64, // max number of miners
+}
+
+fn def_zero() -> u64 {
+    0u64
+}
+
+fn def_five() -> u64 {
+    5u64
 }
 
 impl Wallet {
