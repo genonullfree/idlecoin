@@ -50,8 +50,8 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn add_chronocoins(&mut self, add: u64) {
-        self.chronocoin = match self.chronocoin.checked_add(add) {
+    pub fn inc_chronocoins(&mut self) {
+        self.chronocoin = match self.chronocoin.checked_add(1) {
             Some(c) => c,
             None => u64::MAX,
         }
