@@ -31,7 +31,9 @@ pub fn action_miners(
                 if w.id == c.miner.wallet_id {
                     w.supercoin -= w.supercoin.saturating_div(10);
                     let coins = w.idlecoin.saturating_div(10);
-                    w.sub_idlecoins(coins);
+                    if w.sub_idlecoins(coins).is_err() {
+                        continue;
+                    };
                     msg.insert(
                         0,
                         format!(
