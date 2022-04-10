@@ -365,6 +365,9 @@ fn print_wallets(
                         ));
                     }
                 }
+                if g.chronocoin > commands::time_cost() {
+                    c.purchases.push(format!("'c'<enter>\tPurchase 60m of time travel for this miner for {} chronocoins\n", commands::time_cost()));
+                }
 
                 // Build miner display
                 miner_line.push(

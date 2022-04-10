@@ -136,6 +136,7 @@ impl Miner {
         self.pow = self.pow.saturating_div(10);
     }
 }
+
 pub fn miner_session(mut miner: &mut Miner) {
     // Level up
     if miner.cps >= miner.pow {

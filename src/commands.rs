@@ -5,6 +5,7 @@ use std::collections::HashMap;
 enum PurchaseType {
     Boost,
     Miner,
+    Chrono,
 }
 
 #[derive(Copy, Clone, PartialEq, Hash)]
@@ -42,13 +43,13 @@ pub fn read_inputs(
 
         let mut upgrades = HashMap::new();
 
-        // Iterate through each char in the received buffer
-        'nextchar: for i in buf[..len].iter() {
-            if *i == b'b' {
-                // Purchase boost
-                let mut wals = wallets.lock().unwrap();
-                for w in wals.iter_mut() {
-                    if w.id == c.miner.wallet_id {
+        let mut wals = wallets.lock().unwrap();
+        for w in wals.iter_mut() {
+            if w.id == c.miner.wallet_id {
+                // Iterate through each char in the received buffer
+                'nextchar: for i in buf[..len].iter() {
+                    if *i == b'b' {
+                        // Purchase boost
                         let cost = match buy_boost(c, w) {
                             Ok(c) => c,
                             Err(e) => {
@@ -62,14 +63,8 @@ pub fn read_inputs(
                         };
                         update_upgrade_list(&mut upgrades, PurchaseType::Boost, new);
                     }
-                }
-                drop(wals);
-            }
-            if *i == b'm' {
-                // Purchase miner licenses
-                let mut wals = wallets.lock().unwrap();
-                for w in wals.iter_mut() {
-                    if w.id == c.miner.wallet_id {
+                    if *i == b'm' {
+                        // Purchase miner licenses
                         let cost = match buy_miner(w) {
                             Ok(c) => c,
                             Err(e) => {
@@ -83,8 +78,22 @@ pub fn read_inputs(
                         };
                         update_upgrade_list(&mut upgrades, PurchaseType::Miner, new);
                     }
+                    if *i == b'c' {
+                        // Purchase time travel
+                        let cost = match buy_time(c, w) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                c.updates.push(e.to_string());
+                                continue 'nextchar;
+                            }
+                        };
+                        let new = Purchase {
+                            bought: 1,
+                            cost: cost as u128,
+                        };
+                        update_upgrade_list(&mut upgrades, PurchaseType::Chrono, new);
+                    }
                 }
-                drop(wals);
             }
         }
 
@@ -112,6 +121,14 @@ pub fn read_inputs(
                         p.cost,
                     ),
                 ),
+                PurchaseType::Chrono => msg.insert(
+                    0,
+                    format!(" [{}] Miner 0x{:08x} travelled {} hours forward in time with {} chronocoins\n",
+                        t.format("%Y-%m-%d %H:%M:%S"),
+                        c.miner.wallet_id,
+                        p.bought,
+                        p.cost,
+                    )),
             }
         }
     }
@@ -188,4 +205,28 @@ fn buy_miner(mut wallet: &mut Wallet) -> Result<u64, Error> {
     wallet.max_miners += 1;
 
     Ok(cost)
+}
+
+pub fn time_cost() -> u64 {
+    1000
+}
+
+fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Error> {
+    if wallet.sub_chronocoins(time_cost()).is_err() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "You do not have the funds to purchase a time travel\n",
+        ));
+    }
+
+    let mut c = 60 * 60;
+    loop {
+        miner_session(&mut connection.miner);
+        c -= 1;
+        if c == 0 {
+            break;
+        }
+    }
+
+    Ok(time_cost())
 }
