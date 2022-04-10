@@ -22,4 +22,30 @@ impl Wallet {
         }
     }
 
+    pub fn add_idlecoins(&mut self, new: u64) {
+        self.idlecoin = match self.idlecoin.checked_add(new) {
+            Some(c) => c,
+            None => {
+                self.supercoin = self.supercoin.saturating_add(1);
+                let x: u128 = (u128::from(self.idlecoin) + u128::from(new)) % u128::from(u64::MAX);
+                x as u64
+            }
+        };
+    }
+
+    pub fn sub_idlecoins(&mut self, less: u64) {
+        self.idlecoin = match self.idlecoin.checked_sub(less) {
+            Some(c) => c,
+            None => {
+                if self.supercoin > 0 {
+                    self.supercoin = self.supercoin.saturating_sub(1);
+                    (u128::from(u64::MAX) - u128::from(less) + u128::from(self.idlecoin))
+                        .try_into()
+                        .unwrap()
+                } else {
+                    0
+                }
+            }
+        };
+    }
 }

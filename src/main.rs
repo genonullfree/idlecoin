@@ -22,7 +22,8 @@ mod file;
 mod miner;
 mod wallet;
 
-use crate::wallet::Wallet;
+use crate::miner::*;
+use crate::wallet::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
@@ -46,17 +47,6 @@ const BANNER: &str = "
 Source: https://github.com/genonullfree/idlecoin
 
 Please enter your username: ";
-
-#[derive(Copy, Clone, Debug)]
-pub struct Miner {
-    miner_id: u32,  // miner address ID
-    wallet_id: u64, // wallet address ID
-    level: u64,     // current level
-    cps: u64,       // coin-per-second
-    inc: u64,       // Incrementor value
-    pow: u64,       // Next level up value
-    boost: u64,     // Seconds of boosted cps
-}
 
 #[derive(Debug)]
 pub struct Connection {
@@ -282,15 +272,7 @@ fn login(
     );
 
     // Create new Miner
-    Ok(Miner {
-        miner_id,
-        wallet_id,
-        level: 0,
-        cps: 0,
-        inc: 1,
-        pow: 10,
-        boost: 0,
-    })
+    Ok(Miner::new(wallet_id, miner_id))
 }
 
 fn print_wallets(
