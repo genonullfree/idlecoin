@@ -33,7 +33,7 @@ impl Wallet {
         };
     }
 
-    pub fn sub_idlecoins(&mut self, less: u64) {
+    pub fn sub_idlecoins(&mut self, less: u64) -> Result<(), Error> {
         self.idlecoin = match self.idlecoin.checked_sub(less) {
             Some(c) => c,
             None => {
@@ -43,9 +43,17 @@ impl Wallet {
                         .try_into()
                         .unwrap()
                 } else {
-                    0
+                    return Err(Error::new(ErrorKind::InvalidData, "Not enough idlecoin"));
                 }
             }
         };
+        Ok(())
+    }
+
+    pub fn add_chronocoins(&mut self, add: u64) {
+        self.chronocoin = match self.chronocoin.checked_add(add) {
+            Some(c) => c,
+            None => u64::MAX,
+        }
     }
 }

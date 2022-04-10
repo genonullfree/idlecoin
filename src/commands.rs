@@ -106,14 +106,13 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> u64 {
         return 0;
     }
     let cost = boost_cost(connection.miner.cps);
-    if wallet.idlecoin < cost && wallet.supercoin == 0 {
+    let boost = 128u64;
+    if wallet.sub_idlecoins(cost).is_err() {
         connection
             .updates
             .push("You do not have the funds to purchase boost\n".to_string());
         return 0;
-    }
-    let boost = 128u64;
-    wallet.sub_idlecoins(cost);
+    };
     connection.miner.boost = connection.miner.boost.saturating_add(boost);
 
     cost
@@ -136,10 +135,13 @@ fn buy_miner(connection: &mut Connection, mut wallet: &mut Wallet) -> u64 {
     }
 
     let cost = miner_cost(wallet.max_miners);
-    if wallet.idlecoin > cost || wallet.supercoin > 0 {
-        wallet.sub_idlecoins(cost);
-        wallet.max_miners += 1;
-    }
+    if wallet.sub_idlecoins(cost).is_err() {
+        connection
+            .updates
+            .push("You do not have the funds to purchase a miner\n".to_string());
+        return 0;
+    };
+    wallet.max_miners += 1;
 
     cost
 }
