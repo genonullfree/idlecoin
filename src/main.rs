@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hasher;
 use std::io;
@@ -168,6 +169,9 @@ fn main() -> Result<(), Error> {
         // Calculate miner performance and update stats
         miner::process_miners(&connections, &wallets);
 
+        // Increment chronocoins for each live wallet
+        increment_chrono(&connections, &wallets);
+
         // Send updates to all connected miners
         let mut msg = print_wallets(&connections, &wallets);
 
@@ -275,6 +279,25 @@ fn login(
     Ok(Miner::new(wallet_id, miner_id))
 }
 
+fn increment_chrono(
+    connections: &Arc<Mutex<Vec<Connection>>>,
+    wallets: &Arc<Mutex<Vec<Wallet>>>,
+) {
+    let mut gens = wallets.lock().unwrap();
+    let cons = connections.lock().unwrap();
+
+    let mut live_wallets = HashMap::new();
+    for c in cons.iter() {
+        live_wallets.insert(c.miner.wallet_id, 1);
+    }
+
+    for g in gens.iter_mut() {
+        if live_wallets.contains_key(&g.id) {
+            g.inc_chronocoins();
+        }
+    }
+}
+
 fn print_wallets(
     connections: &Arc<Mutex<Vec<Connection>>>,
     wallets: &Arc<Mutex<Vec<Wallet>>>,
@@ -346,13 +369,15 @@ fn print_wallets(
         }
 
         let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {}\n",
+            "[{:03}] Wallet 0x{:016x} Coins: {}:{} Miner Licenses: {} Total Cps: {} Chronocoin: {} Randocoin: {}\n",
             gens.len() - i,
             g.id,
             g.supercoin,
             g.idlecoin,
             g.max_miners,
             total_cps,
+            g.chronocoin,
+            g.randocoin,
         )
         .to_owned();
 
