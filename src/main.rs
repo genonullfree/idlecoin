@@ -20,6 +20,9 @@ use xxhash_rust::xxh3;
 mod commands;
 mod file;
 mod miner;
+mod wallet;
+
+use crate::wallet::Wallet;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CLR: &str = "\x1b[2J\x1b[;H";
@@ -43,14 +46,6 @@ const BANNER: &str = "
 Source: https://github.com/genonullfree/idlecoin
 
 Please enter your username: ";
-
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Wallet {
-    id: u64,         // wallet address ID
-    supercoin: u64,  // supercoin
-    idlecoin: u64,   // idlecoin
-    max_miners: u64, // max number of miners
-}
 
 #[derive(Copy, Clone, Debug)]
 pub struct Miner {
@@ -245,12 +240,7 @@ fn login(
         }
     }
     if !found {
-        wals.push(Wallet {
-            id: wallet_id,
-            supercoin: 0,
-            idlecoin: 0,
-            max_miners,
-        });
+        wals.push(Wallet::new(wallet_id));
     }
     drop(wals);
 
