@@ -399,8 +399,9 @@ fn print_wallets(
         }
 
         let wal = &format!(
-            "[{:03}] Wallet 0x{:016x} Miner Licenses: {} Chronocoin: {} Randocoin: {} Coins: {}:{} Total Cps: {}\n",
+            "[{:03}/{:03}] Wallet 0x{:016x} Miner Licenses: {} Chronocoin: {} Randocoin: {} Coins: {}:{} Total Cps: {}\n",
             gens.len() - i,
+            gens.len(),
             g.id,
             g.max_miners,
             g.chronocoin,
