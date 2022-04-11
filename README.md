@@ -111,12 +111,15 @@ These events can be a mix of users purchasing upgrades for their miners or speci
 ### Purchasing Upgrades
 
 Now certain upgrades can be purchased while playing! Idlecoin will notify you when something is available for purchase and how much it will cost. You can bundle purchasing many items into 1 command string by entering multiple letters before hitting `enter`. Here are the current upgrades available and their associated purchase commands:
-*Boost*
-Boost will allow a miner to increase it's Cps 3x faster with the command letter `b`. Boost is purchased in bundles of 128 seconds and costs log(2) of your Miners current Cps value. As your Miner becomes more powerful and generates more Cps, its cost for Boost will increase.
-*Miner License*
-Purchasing additional Miner Licenses with the command letter `m` will allow your Wallet to connect more concurrent Miners. The price for the Miner Licenses increases for each additional License according to this function: `u64::MAX / (0x100000 >> (max_miners - 5))`. `max_miners` is a per-Wallet value and starts out at `5` and can currently grow to 12 through additional Licenses.
-*Time Travel*
-Time travel can be purchased via Chronocoins with the command letter `c`. These coins increase monatomically, 1 per second, for every Wallet that has at least 1 Miner currently attached to it. Time travel costs 1000 Chronocoins and will allwo the current Miner to travel forward in time by 1 hour. This time travel will cause the Miner to accumulate all Cps and Idlecoins as if the hour had actually passed.
+
+* *Boost*
+> Boost will allow a miner to increase it's Cps 3x faster with the command letter `b`. Boost is purchased in bundles of 128 seconds and costs log(2) of your Miners current Cps value. As your Miner becomes more powerful and generates more Cps, its cost for Boost will increase.
+
+* *Miner License*
+> Purchasing additional Miner Licenses with the command letter `m` will allow your Wallet to connect more concurrent Miners. The price for the Miner Licenses increases for each additional License according to this function: `u64::MAX / (0x100000 >> (max_miners - 5))`. `max_miners` is a per-Wallet value and starts out at `5` and can currently grow to 12 through additional Licenses.
+
+* *Time Travel*
+> Time travel can be purchased via Chronocoins with the command letter `c`. These coins increase monatomically, 1 per second, for every Wallet that has at least 1 Miner currently attached to it. Time travel costs 1000 Chronocoins and will allwo the current Miner to travel forward in time by 1 hour. This time travel will cause the Miner to accumulate all Cps and Idlecoins as if the hour had actually passed.
 
 Commands can be chained together and will be executed sequentially. For example, entering a command buffer of:
 ```
