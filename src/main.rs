@@ -48,6 +48,7 @@ const BANNER: &str = "
 Source: https://github.com/genonullfree/idlecoin
 
 Please enter your username: ";
+const TURDS: [u64;1] = [0x9d75d7d276240c38];
 
 #[derive(Debug)]
 pub struct Connection {
@@ -221,6 +222,13 @@ fn login(
     let mut hash = xxh3::Xxh3::new();
     hash.write(&id_raw);
     let wallet_id = hash.finish();
+
+    // Check if incoming connection is a turd
+    for t in TURDS.iter() {
+        if *t == wallet_id {
+            return Err(Error::new(ErrorKind::ConnectionRefused, format!("You're a turd")));
+        }
+    }
 
     // ID or create new wallet
     let mut wals = wallets.lock().unwrap();
