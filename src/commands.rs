@@ -125,7 +125,7 @@ pub fn read_inputs(
                     0,
                     format!(" [{}] Miner 0x{:08x} travelled {} hours forward in time with {} chronocoins\n",
                         t.format("%Y-%m-%d %H:%M:%S"),
-                        c.miner.wallet_id,
+                        c.miner.miner_id,
                         p.bought,
                         p.cost,
                     )),
