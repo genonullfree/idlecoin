@@ -43,13 +43,15 @@ pub fn read_inputs(
                 if w.id == c.miner.wallet_id {
                     // Iterate through each char in the received buffer
                     for i in buf[..len].iter() {
-                        match *i {
+                        let new = match *i {
                             b'b' => {
                                 // Purchase boost
                                 let cost = match buy_boost(c, w) {
                                     Ok(c) => c,
                                     Err(e) => {
-                                        c.updates.push(e.to_string());
+                                        if !c.updates.iter().any(|u| *u == e.to_string()) {
+                                            c.updates.push(e.to_string());
+                                        }
                                         continue;
                                     }
                                 };
@@ -57,14 +59,16 @@ pub fn read_inputs(
                                     bought: 128,
                                     cost: cost as u128,
                                 };
-                                update_upgrade_list(&mut upgrades, PurchaseType::Boost, new);
+                                Some((PurchaseType::Boost, new))
                             }
                             b'm' => {
                                 // Purchase miner licenses
                                 let cost = match buy_miner(w) {
                                     Ok(c) => c,
                                     Err(e) => {
-                                        c.updates.push(e.to_string());
+                                        if !c.updates.iter().any(|u| *u == e.to_string()) {
+                                            c.updates.push(e.to_string());
+                                        }
                                         continue;
                                     }
                                 };
@@ -72,14 +76,16 @@ pub fn read_inputs(
                                     bought: 1,
                                     cost: cost as u128,
                                 };
-                                update_upgrade_list(&mut upgrades, PurchaseType::Miner, new);
+                                Some((PurchaseType::Miner, new))
                             }
                             b'c' => {
                                 // Purchase time travel
                                 let cost = match buy_time(c, w) {
                                     Ok(c) => c,
                                     Err(e) => {
-                                        c.updates.push(e.to_string());
+                                        if !c.updates.iter().any(|u| *u == e.to_string()) {
+                                            c.updates.push(e.to_string());
+                                        }
                                         continue;
                                     }
                                 };
@@ -87,10 +93,13 @@ pub fn read_inputs(
                                     bought: 1,
                                     cost: cost as u128,
                                 };
-                                update_upgrade_list(&mut upgrades, PurchaseType::Chrono, new);
+                                Some((PurchaseType::Chrono, new))
                             }
-                            _ => (),
-                        }
+                            _ => None,
+                        };
+                        if let Some((p_type, p)) = new {
+                            update_upgrade_list(&mut upgrades, p_type, p);
+                        };
                     }
                 }
             }
