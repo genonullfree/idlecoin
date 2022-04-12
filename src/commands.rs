@@ -171,7 +171,7 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Er
     if wallet.sub_idlecoins(cost).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            "You do not have the funds to purchase boost\n",
+            format!("You need {} idlecoins to purchase boost\n", cost),
         ));
     }
     connection.miner.boost = connection.miner.boost.saturating_add(128);
@@ -199,7 +199,7 @@ fn buy_miner(mut wallet: &mut Wallet) -> Result<u64, Error> {
     if wallet.sub_idlecoins(cost).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            "You do not have the funds to purchase a miner\n",
+            format!("You need {} idlecoins to purchase a miner\n", cost),
         ));
     };
     wallet.max_miners += 1;
@@ -215,7 +215,7 @@ fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Err
     if wallet.sub_chronocoins(time_cost()).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            "You do not have the funds to purchase a time travel\n",
+            "You need 1000 chronocoins to purchase a time travel\n",
         ));
     }
 
