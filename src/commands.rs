@@ -22,76 +22,84 @@ pub fn read_inputs(
     let mut cons = connections.lock().unwrap();
 
     for c in cons.iter_mut() {
-        let mut buf = [0; 1024];
-        let len = match c.stream.read(&mut buf) {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-
-        // Server terminal output
-        if len > 0 {
-            println!(
-                "> User: 0x{:016x} Miner 0x{:08x} sent: {:?} from: {:?}",
-                c.miner.wallet_id,
-                c.miner.miner_id,
-                &buf[..len],
-                c.stream
-            );
-        } else {
-            continue;
-        }
-
+        let mut buf = [0; 4096];
         let mut upgrades = HashMap::new();
+        while let Ok(len) = c.stream.read(&mut buf) {
+            // Server terminal output
+            if len > 0 {
+                println!(
+                    "> User: 0x{:016x} Miner 0x{:08x} sent: {:?} from: {:?}",
+                    c.miner.wallet_id,
+                    c.miner.miner_id,
+                    &buf[..len],
+                    c.stream
+                );
+            } else {
+                break;
+            }
 
-        let mut wals = wallets.lock().unwrap();
-        for w in wals.iter_mut() {
-            if w.id == c.miner.wallet_id {
-                // Iterate through each char in the received buffer
-                'nextchar: for i in buf[..len].iter() {
-                    if *i == b'b' {
-                        // Purchase boost
-                        let cost = match buy_boost(c, w) {
-                            Ok(c) => c,
-                            Err(e) => {
-                                c.updates.push(e.to_string());
-                                continue 'nextchar;
+            let mut wals = wallets.lock().unwrap();
+            for w in wals.iter_mut() {
+                if w.id == c.miner.wallet_id {
+                    // Iterate through each char in the received buffer
+                    for i in buf[..len].iter() {
+                        let new = match *i {
+                            b'b' => {
+                                // Purchase boost
+                                let cost = match buy_boost(c, w) {
+                                    Ok(c) => c,
+                                    Err(e) => {
+                                        if !c.updates.iter().any(|u| *u == e.to_string()) {
+                                            c.updates.push(e.to_string());
+                                        }
+                                        continue;
+                                    }
+                                };
+                                let new = Purchase {
+                                    bought: 128,
+                                    cost: cost as u128,
+                                };
+                                Some((PurchaseType::Boost, new))
                             }
-                        };
-                        let new = Purchase {
-                            bought: 128,
-                            cost: cost as u128,
-                        };
-                        update_upgrade_list(&mut upgrades, PurchaseType::Boost, new);
-                    }
-                    if *i == b'm' {
-                        // Purchase miner licenses
-                        let cost = match buy_miner(w) {
-                            Ok(c) => c,
-                            Err(e) => {
-                                c.updates.push(e.to_string());
-                                continue 'nextchar;
+                            b'm' => {
+                                // Purchase miner licenses
+                                let cost = match buy_miner(w) {
+                                    Ok(c) => c,
+                                    Err(e) => {
+                                        if !c.updates.iter().any(|u| *u == e.to_string()) {
+                                            c.updates.push(e.to_string());
+                                        }
+                                        continue;
+                                    }
+                                };
+                                let new = Purchase {
+                                    bought: 1,
+                                    cost: cost as u128,
+                                };
+                                Some((PurchaseType::Miner, new))
                             }
-                        };
-                        let new = Purchase {
-                            bought: 1,
-                            cost: cost as u128,
-                        };
-                        update_upgrade_list(&mut upgrades, PurchaseType::Miner, new);
-                    }
-                    if *i == b'c' {
-                        // Purchase time travel
-                        let cost = match buy_time(c, w) {
-                            Ok(c) => c,
-                            Err(e) => {
-                                c.updates.push(e.to_string());
-                                continue 'nextchar;
+                            b'c' => {
+                                // Purchase time travel
+                                let cost = match buy_time(c, w) {
+                                    Ok(c) => c,
+                                    Err(e) => {
+                                        if !c.updates.iter().any(|u| *u == e.to_string()) {
+                                            c.updates.push(e.to_string());
+                                        }
+                                        continue;
+                                    }
+                                };
+                                let new = Purchase {
+                                    bought: 1,
+                                    cost: cost as u128,
+                                };
+                                Some((PurchaseType::Chrono, new))
                             }
+                            _ => None,
                         };
-                        let new = Purchase {
-                            bought: 1,
-                            cost: cost as u128,
+                        if let Some((p_type, p)) = new {
+                            update_upgrade_list(&mut upgrades, p_type, p);
                         };
-                        update_upgrade_list(&mut upgrades, PurchaseType::Chrono, new);
                     }
                 }
             }
@@ -125,7 +133,7 @@ pub fn read_inputs(
                     0,
                     format!(" [{}] Miner 0x{:08x} travelled {} hours forward in time with {} chronocoins\n",
                         t.format("%Y-%m-%d %H:%M:%S"),
-                        c.miner.wallet_id,
+                        c.miner.miner_id,
                         p.bought,
                         p.cost,
                     )),
@@ -171,7 +179,7 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Er
     if wallet.sub_idlecoins(cost).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            "You do not have the funds to purchase boost\n",
+            format!("You need {} idlecoins to purchase boost\n", cost),
         ));
     }
     connection.miner.boost = connection.miner.boost.saturating_add(128);
@@ -199,7 +207,7 @@ fn buy_miner(mut wallet: &mut Wallet) -> Result<u64, Error> {
     if wallet.sub_idlecoins(cost).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            "You do not have the funds to purchase a miner\n",
+            format!("You need {} idlecoins to purchase a miner\n", cost),
         ));
     };
     wallet.max_miners += 1;
@@ -215,7 +223,7 @@ fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Err
     if wallet.sub_chronocoins(time_cost()).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            "You do not have the funds to purchase a time travel\n",
+            "You need 1000 chronocoins to purchase a time travel\n",
         ));
     }
 

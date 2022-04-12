@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "idlecoin"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "rand",
