@@ -37,9 +37,11 @@ pub fn action_miners(
                     msg.insert(
                         0,
                         format!(
-                            " [{}] Wallet 0x{:016x} was taxed 10% by the IRS!\n",
+                            " [{}] Wallet {}0x{:016x}{} was taxed 10% by the IRS!\n",
                             t.format("%Y-%m-%d %H:%M:%S"),
-                            c.miner.miner_id
+                            BLUE,
+                            c.miner.miner_id,
+                            RST,
                         ),
                     );
                 }
@@ -53,9 +55,11 @@ pub fn action_miners(
                 msg.insert(
                     0,
                     format!(
-                        " [{}] Miner 0x{:08x} lost a level\n",
+                        " [{}] Miner {}0x{:08x}{} lost a level\n",
                         t.format("%Y-%m-%d %H:%M:%S"),
-                        c.miner.miner_id
+                        BLUE,
+                        c.miner.miner_id,
+                        RST,
                     ),
                 );
             }
@@ -67,9 +71,11 @@ pub fn action_miners(
                 msg.insert(
                     0,
                     format!(
-                        " [{}] Miner 0x{:08x} leveled up\n",
+                        " [{}] Miner {}0x{:08x}{} leveled up\n",
                         t.format("%Y-%m-%d %H:%M:%S"),
-                        c.miner.miner_id
+                        BLUE,
+                        c.miner.miner_id,
+                        RST,
                     ),
                 );
             };
@@ -79,9 +85,11 @@ pub fn action_miners(
             msg.insert(
                 0,
                 format!(
-                    " [{}] Miner 0x{:08x} gained 10% CPS boost\n",
+                    " [{}] Miner {}0x{:08x}{} gained 10% CPS boost\n",
                     t.format("%Y-%m-%d %H:%M:%S"),
-                    c.miner.miner_id
+                    BLUE,
+                    c.miner.miner_id,
+                    RST,
                 ),
             );
         }
