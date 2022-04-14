@@ -134,6 +134,8 @@ fn main() -> Result<(), Error> {
                             Ok(_) => (),
                             Err(e) => println!("Failed to send: {e}"),
                         };
+                    } else {
+                        println!("Error in login: {} from {:?}", e, s);
                     }
                     continue;
                 }
@@ -224,7 +226,14 @@ fn login(
 
     // Only read 0-1023 to have the end NULL so we can safely do the
     // \r\n => \n\0 conversion
-    let len = stream.read(&mut id_raw[..1023])?;
+    let len = match stream.read(&mut id_raw[..1023]) {
+        Ok(l) => l,
+        Err(e) => return Err(e),
+    };
+    if len == 0 {
+        return Err(Error::new(ErrorKind::ConnectionReset, "Nothing read"));
+    }
+
     for i in 0..len {
         if id_raw[i] == b'\r' && id_raw[i + 1] == b'\n' {
             id_raw[i] = b'\n';
