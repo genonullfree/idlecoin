@@ -37,9 +37,11 @@ pub fn action_miners(
                     msg.insert(
                         0,
                         format!(
-                            " [{}] Wallet 0x{:016x} was taxed 10% by the IRS!\n",
+                            " [{}] Wallet {}0x{:016x}{} was taxed 10% by the IRS!\n",
                             t.format("%Y-%m-%d %H:%M:%S"),
-                            c.miner.miner_id
+                            BLUE,
+                            c.miner.miner_id,
+                            RST,
                         ),
                     );
                 }
@@ -53,9 +55,11 @@ pub fn action_miners(
                 msg.insert(
                     0,
                     format!(
-                        " [{}] Miner 0x{:08x} lost a level\n",
+                        " [{}] Miner {}0x{:08x}{} lost a level\n",
                         t.format("%Y-%m-%d %H:%M:%S"),
-                        c.miner.miner_id
+                        BLUE,
+                        c.miner.miner_id,
+                        RST,
                     ),
                 );
             }
@@ -67,9 +71,11 @@ pub fn action_miners(
                 msg.insert(
                     0,
                     format!(
-                        " [{}] Miner 0x{:08x} leveled up\n",
+                        " [{}] Miner {}0x{:08x}{} leveled up\n",
                         t.format("%Y-%m-%d %H:%M:%S"),
-                        c.miner.miner_id
+                        BLUE,
+                        c.miner.miner_id,
+                        RST,
                     ),
                 );
             };
@@ -79,9 +85,11 @@ pub fn action_miners(
             msg.insert(
                 0,
                 format!(
-                    " [{}] Miner 0x{:08x} gained 10% CPS boost\n",
+                    " [{}] Miner {}0x{:08x}{} gained 10% CPS boost\n",
                     t.format("%Y-%m-%d %H:%M:%S"),
-                    c.miner.miner_id
+                    BLUE,
+                    c.miner.miner_id,
+                    RST,
                 ),
             );
         }
@@ -134,6 +142,20 @@ impl Miner {
         self.level = self.level.saturating_sub(1);
         self.inc = self.inc.saturating_sub(self.level);
         self.pow = self.pow.saturating_div(10);
+    }
+
+    pub fn print(&self) -> String {
+        format!(
+            "[M:{}0x{:0>8x}{} Cps:{}{}{} B:{} L:{:<2}] ",
+            BLUE,
+            self.miner_id,
+            RST,
+            GREEN,
+            utils::disp_units(self.cps),
+            RST,
+            utils::disp_units(self.boost),
+            self.level,
+        )
     }
 }
 

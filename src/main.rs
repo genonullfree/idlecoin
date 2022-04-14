@@ -21,13 +21,13 @@ use xxhash_rust::xxh3;
 mod commands;
 mod file;
 mod miner;
+mod utils;
 mod wallet;
 
 use crate::miner::*;
 use crate::wallet::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const CLR: &str = "\x1b[2J\x1b[;H";
 const PORT: u16 = 7654;
 const SAVE: &str = ".idlecoin";
 const AUTOSAVE: usize = 300;
@@ -49,6 +49,15 @@ Source: https://github.com/genonullfree/idlecoin
 
 Please enter your username: ";
 const TURDS: [u64; 1] = [0xe492ba332d614d88];
+
+const CLR: &str = "\x1b[2J\x1b[;H";
+const RST: &str = "\x1b[0m";
+const RED: &str = "\x1b[1;31m";
+const GREEN: &str = "\x1b[1;32m";
+const YELLOW: &str = "\x1b[1;33m";
+const BLUE: &str = "\x1b[1;34m";
+const PURPLE: &str = "\x1b[1;35m";
+const CYAN: &str = "\x1b[1;36m";
 
 #[derive(Debug)]
 pub struct Connection {
@@ -92,7 +101,7 @@ fn main() -> Result<(), Error> {
                 let mut cons = conns_exit.lock().unwrap();
                 for c in cons.iter_mut() {
                     // Send out the shutdown message to all connected miners
-                    if c.stream.write_all(format!("{}{}v{}\n\n[!] The Idlecoin server is shutting down.\nTimestamp: {}\nMessage: {}", CLR, IDLECOIN, VERSION, t, input).as_bytes()).is_ok() {}
+                    if c.stream.write_all(format!("{}{}{}{}v{}\n\n{}[!] The Idlecoin server is shutting down.{}\nMessage: {}{}{}Timestamp: {}\n", CLR, YELLOW, IDLECOIN, RST, VERSION, RED, RST, RED, input,RST, t).as_bytes()).is_ok() {}
                 }
 
                 // Save the current stats file
@@ -125,6 +134,8 @@ fn main() -> Result<(), Error> {
                             Ok(_) => (),
                             Err(e) => println!("Failed to send: {e}"),
                         };
+                    } else {
+                        println!("Error in login: {} from {:?}", e, s);
                     }
                     continue;
                 }
@@ -140,8 +151,8 @@ fn main() -> Result<(), Error> {
             };
 
             let updates = vec![format!(
-                "\nLogged in as Wallet: 0x{:016x} Miner: 0x{:08x}\n",
-                miner.wallet_id, miner.miner_id
+                "\nLogged in as Wallet: {}0x{:016x}{} Miner: {}0x{:08x}{}\n",
+                PURPLE, miner.wallet_id, RST, BLUE, miner.miner_id, RST
             )
             .to_owned()];
             let conn = Connection {
@@ -202,15 +213,27 @@ fn login(
     connections: &Arc<Mutex<Vec<Connection>>>,
 ) -> Result<Miner, Error> {
     // Request userid
-    let msg = format!("{}Welcome to{}v{}\n\n{}", CLR, IDLECOIN, VERSION, BANNER);
-    stream.write_all(msg.as_bytes())?;
+    let msg = format!(
+        "{}Welcome to{}{}{}v{}\n\n{}",
+        CLR, YELLOW, IDLECOIN, RST, VERSION, BANNER
+    );
+    if stream.write_all(msg.as_bytes()).is_err() {
+        return Err(Error::new(ErrorKind::ConnectionReset, "No write-back"));
+    };
 
     // Read userid
     let mut id_raw: [u8; 1024] = [0; 1024];
 
     // Only read 0-1023 to have the end NULL so we can safely do the
     // \r\n => \n\0 conversion
-    let len = stream.read(&mut id_raw[..1023])?;
+    let len = match stream.read(&mut id_raw[..1023]) {
+        Ok(l) => l,
+        Err(e) => return Err(e),
+    };
+    if len == 0 {
+        return Err(Error::new(ErrorKind::ConnectionReset, "Nothing read"));
+    }
+
     for i in 0..len {
         if id_raw[i] == b'\r' && id_raw[i + 1] == b'\n' {
             id_raw[i] = b'\n';
@@ -228,7 +251,10 @@ fn login(
         if *t == wallet_id {
             return Err(Error::new(
                 ErrorKind::ConnectionRefused,
-                format!("Wallet 0x{:016x}: Don't be a turd", wallet_id),
+                format!(
+                    "Wallet {}0x{:016x}{}: Don't be a turd",
+                    PURPLE, wallet_id, RST
+                ),
             ));
         }
     }
@@ -258,8 +284,8 @@ fn login(
     }
     if num >= max_miners {
         let msg = format!(
-            "Connection refused: Too many miners connected for user 0x{:016x} (max: {})",
-            wallet_id, max_miners,
+            "{}Connection refused{}: Too many miners connected for user {}0x{:016x}{} (max: {})",
+            RED, RST, PURPLE, wallet_id, RST, max_miners,
         );
         println!("{}", msg);
         drop(cons);
@@ -340,7 +366,7 @@ fn print_wallets(
     connections: &Arc<Mutex<Vec<Connection>>>,
     wallets: &Arc<Mutex<Vec<Wallet>>>,
 ) -> String {
-    let mut msg = format!("{}{}v{}\n\n", CLR, IDLECOIN, VERSION);
+    let mut msg = format!("{}{}{}{}v{}\n\n", CLR, YELLOW, IDLECOIN, RST, VERSION);
     let mut gens = wallets.lock().unwrap().deref().clone();
     let mut cons = connections.lock().unwrap();
 
@@ -380,16 +406,7 @@ fn print_wallets(
                 }
 
                 // Build miner display
-                miner_line.push(
-                    format!(
-                        "[M:0x{:0>8x} Cps:{} B:{} L:{:<2}] ",
-                        c.miner.miner_id,
-                        disp_units(c.miner.cps),
-                        disp_units(c.miner.boost),
-                        c.miner.level
-                    )
-                    .to_owned(),
-                );
+                miner_line.push(c.miner.print());
                 total_cps += c.miner.cps as u128;
                 num += 1;
                 if num > 3 {
@@ -410,22 +427,21 @@ fn print_wallets(
         }
 
         let wal = &format!(
-            "[{:03}/{:03}] Wallet 0x{:016x} Miner Licenses: {} Chronocoin: {} Randocoin: {} Coins: {}:{} Total Cps: {}\n",
+            "[{}{:03}/{:03}{}] {} Total Cps: {}{}{}\n",
+            CYAN,
             gens.len() - i,
             gens.len(),
-            g.id,
-            g.max_miners,
-            g.chronocoin,
-            g.randocoin,
-            g.supercoin,
-            g.idlecoin,
+            RST,
+            g.print(),
+            GREEN,
             total_cps,
+            RST,
         )
         .to_owned();
 
         if !min.is_empty() {
             msg += wal;
-            msg += "  [*] Miners:\n";
+            msg += &format!("  [{}*{}] Miners:\n", BLUE, RST);
             msg += &min;
             msg += "\n";
         }
@@ -434,27 +450,6 @@ fn print_wallets(
     drop(gens);
 
     msg
-}
-
-fn disp_units(num: u64) -> String {
-    let unit = [' ', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
-    let mut value = num as f64;
-
-    let mut count = 0;
-    loop {
-        if (value / 1000.0) > 1.0 {
-            count += 1;
-            value /= 1000.0;
-        } else {
-            break;
-        }
-        if count == unit.len() - 1 {
-            break;
-        }
-    }
-
-    let n = if count > 0 { 1 } else { 0 };
-    format!("{:.*}{:>1}", n, value, unit[count])
 }
 
 fn format_msg(input: &mut String, actions: &mut Vec<String>) {
