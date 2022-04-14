@@ -86,4 +86,14 @@ impl Wallet {
         };
         Ok(())
     }
+
+    pub fn print(&self) -> String {
+        format!("Wallet {}0x{:016x}{} Miner Licenses: {}{}{} Chronocoin: {}{}{} Randocoin: {}{}{} Coins: {}{}:{}{}",
+            PURPLE, self.id, RST,
+            BLUE, self.max_miners, RST,
+            YELLOW, self.chronocoin, RST,
+            YELLOW, self.randocoin, RST,
+            YELLOW, self.supercoin, self.idlecoin, RST,
+        )
+    }
 }

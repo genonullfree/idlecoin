@@ -21,6 +21,7 @@ use xxhash_rust::xxh3;
 mod commands;
 mod file;
 mod miner;
+mod utils;
 mod wallet;
 
 use crate::miner::*;
@@ -396,20 +397,7 @@ fn print_wallets(
                 }
 
                 // Build miner display
-                miner_line.push(
-                    format!(
-                        "[M:{}0x{:0>8x}{} Cps:{}{}{} B:{} L:{:<2}] ",
-                        BLUE,
-                        c.miner.miner_id,
-                        RST,
-                        GREEN,
-                        disp_units(c.miner.cps),
-                        RST,
-                        disp_units(c.miner.boost),
-                        c.miner.level,
-                    )
-                    .to_owned(),
-                );
+                miner_line.push(c.miner.print());
                 total_cps += c.miner.cps as u128;
                 num += 1;
                 if num > 3 {
@@ -430,25 +418,12 @@ fn print_wallets(
         }
 
         let wal = &format!(
-            "[{}{:03}/{:03}{}] Wallet {}0x{:016x}{} Miner Licenses: {}{}{} Chronocoin: {}{}{} Randocoin: {}{}{} Coins: {}{}:{}{} Total Cps: {}{}{}\n",
+            "[{}{:03}/{:03}{}] {} Total Cps: {}{}{}\n",
             CYAN,
             gens.len() - i,
             gens.len(),
             RST,
-            PURPLE,
-            g.id,
-            RST, BLUE,
-            g.max_miners, RST,
-            YELLOW,
-            g.chronocoin,
-            RST,
-            YELLOW,
-            g.randocoin,
-            RST,
-            YELLOW,
-            g.supercoin,
-            g.idlecoin,
-            RST,
+            g.print(),
             GREEN,
             total_cps,
             RST,
@@ -466,27 +441,6 @@ fn print_wallets(
     drop(gens);
 
     msg
-}
-
-fn disp_units(num: u64) -> String {
-    let unit = [' ', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
-    let mut value = num as f64;
-
-    let mut count = 0;
-    loop {
-        if (value / 1000.0) > 1.0 {
-            count += 1;
-            value /= 1000.0;
-        } else {
-            break;
-        }
-        if count == unit.len() - 1 {
-            break;
-        }
-    }
-
-    let n = if count > 0 { 1 } else { 0 };
-    format!("{:.*}{:>1}", n, value, unit[count])
 }
 
 fn format_msg(input: &mut String, actions: &mut Vec<String>) {

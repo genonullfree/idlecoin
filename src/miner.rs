@@ -143,6 +143,20 @@ impl Miner {
         self.inc = self.inc.saturating_sub(self.level);
         self.pow = self.pow.saturating_div(10);
     }
+
+    pub fn print(&self) -> String {
+        format!(
+            "[M:{}0x{:0>8x}{} Cps:{}{}{} B:{} L:{:<2}] ",
+            BLUE,
+            self.miner_id,
+            RST,
+            GREEN,
+            utils::disp_units(self.cps),
+            RST,
+            utils::disp_units(self.boost),
+            self.level,
+        )
+    }
 }
 
 pub fn miner_session(mut miner: &mut Miner) {
