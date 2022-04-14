@@ -214,7 +214,9 @@ fn login(
         "{}Welcome to{}{}{}v{}\n\n{}",
         CLR, YELLOW, IDLECOIN, RST, VERSION, BANNER
     );
-    stream.write_all(msg.as_bytes())?;
+    if stream.write_all(msg.as_bytes()).is_err() {
+        return Err(Error::new(ErrorKind::ConnectionReset, "No write-back"));
+    };
 
     // Read userid
     let mut id_raw: [u8; 1024] = [0; 1024];
