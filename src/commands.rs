@@ -56,6 +56,10 @@ pub fn read_inputs(
                                     }
                                 }
                             }
+                            b'B' => {
+                                // Purchase MAX boost
+                                buy_max_boost(c, w)
+                            }
                             b'm' => {
                                 // Purchase miner licenses
                                 match buy_miner(w) {
@@ -180,6 +184,23 @@ fn buy_boost(
             cost: cost as u128,
         },
     ))
+}
+
+fn buy_max_boost(
+    connection: &mut Connection,
+    wallet: &mut Wallet,
+) -> Option<(PurchaseType, Purchase)> {
+    let mut totals = Purchase { bought: 0, cost: 0 };
+
+    loop {
+        let (_, p) = match buy_boost(connection, wallet) {
+            Ok(b) => b,
+            Err(_) => return Some((PurchaseType::Boost, totals)),
+        };
+
+        totals.bought += p.bought;
+        totals.cost += p.cost;
+    }
 }
 
 pub fn miner_cost(max_miners: u64) -> u64 {
