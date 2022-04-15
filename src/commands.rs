@@ -1,5 +1,6 @@
 use crate::*;
 use std::collections::HashMap;
+use std::ops::AddAssign;
 
 #[derive(PartialEq, Eq, Hash)]
 enum PurchaseType {
@@ -12,6 +13,21 @@ enum PurchaseType {
 struct Purchase {
     bought: usize,
     cost: u128,
+}
+
+impl Purchase {
+    fn new() -> Self {
+        Purchase { bought: 0, cost: 0 }
+    }
+}
+
+impl AddAssign for Purchase {
+    fn add_assign(&mut self, other: Self) {
+        *self = Self {
+            bought: self.bought + other.bought,
+            cost: self.cost + other.cost,
+        };
+    }
 }
 
 pub fn read_inputs(
@@ -72,6 +88,10 @@ pub fn read_inputs(
                                     }
                                 }
                             }
+                            b'M' => {
+                                // Purchase MAX miners
+                                buy_max_miner(w)
+                            }
                             b'c' => {
                                 // Purchase time travel
                                 match buy_time(c, w) {
@@ -83,6 +103,10 @@ pub fn read_inputs(
                                         continue;
                                     }
                                 }
+                            }
+                            b'C' => {
+                                // Purchase MAX time travel
+                                buy_max_time(c, w)
                             }
                             _ => None,
                         };
@@ -141,8 +165,7 @@ fn update_upgrade_list(
         Some(n) => *n,
         None => Purchase { bought: 0, cost: 0 },
     };
-    node.bought += p.bought;
-    node.cost += p.cost;
+    node += p;
     map.insert(p_type, node);
 }
 
@@ -190,7 +213,7 @@ fn buy_max_boost(
     connection: &mut Connection,
     wallet: &mut Wallet,
 ) -> Option<(PurchaseType, Purchase)> {
-    let mut totals = Purchase { bought: 0, cost: 0 };
+    let mut totals = Purchase::new();
 
     loop {
         let (_, p) = match buy_boost(connection, wallet) {
@@ -198,8 +221,7 @@ fn buy_max_boost(
             Err(_) => return Some((PurchaseType::Boost, totals)),
         };
 
-        totals.bought += p.bought;
-        totals.cost += p.cost;
+        totals += p;
     }
 }
 
@@ -237,6 +259,19 @@ fn buy_miner(mut wallet: &mut Wallet) -> Result<(PurchaseType, Purchase), Error>
     ))
 }
 
+fn buy_max_miner(wallet: &mut Wallet) -> Option<(PurchaseType, Purchase)> {
+    let mut totals = Purchase::new();
+
+    loop {
+        let (_, p) = match buy_miner(wallet) {
+            Ok(m) => m,
+            Err(_) => return Some((PurchaseType::Miner, totals)),
+        };
+
+        totals += p;
+    }
+}
+
 pub fn time_cost() -> u64 {
     1000
 }
@@ -269,4 +304,20 @@ fn buy_time(
             cost: time_cost() as u128,
         },
     ))
+}
+
+fn buy_max_time(
+    connection: &mut Connection,
+    wallet: &mut Wallet,
+) -> Option<(PurchaseType, Purchase)> {
+    let mut totals = Purchase::new();
+
+    loop {
+        let (_, p) = match buy_time(connection, wallet) {
+            Ok(t) => t,
+            Err(_) => return Some((PurchaseType::Chrono, totals)),
+        };
+
+        totals += p;
+    }
 }
