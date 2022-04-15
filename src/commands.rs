@@ -46,54 +46,39 @@ pub fn read_inputs(
                         let new = match *i {
                             b'b' => {
                                 // Purchase boost
-                                let cost = match buy_boost(c, w) {
-                                    Ok(c) => c,
+                                match buy_boost(c, w) {
+                                    Ok(c) => Some(c),
                                     Err(e) => {
                                         if !c.updates.iter().any(|u| *u == e.to_string()) {
                                             c.updates.push(e.to_string());
                                         }
                                         continue;
                                     }
-                                };
-                                let new = Purchase {
-                                    bought: 128,
-                                    cost: cost as u128,
-                                };
-                                Some((PurchaseType::Boost, new))
+                                }
                             }
                             b'm' => {
                                 // Purchase miner licenses
-                                let cost = match buy_miner(w) {
-                                    Ok(c) => c,
+                                match buy_miner(w) {
+                                    Ok(c) => Some(c),
                                     Err(e) => {
                                         if !c.updates.iter().any(|u| *u == e.to_string()) {
                                             c.updates.push(e.to_string());
                                         }
                                         continue;
                                     }
-                                };
-                                let new = Purchase {
-                                    bought: 1,
-                                    cost: cost as u128,
-                                };
-                                Some((PurchaseType::Miner, new))
+                                }
                             }
                             b'c' => {
                                 // Purchase time travel
-                                let cost = match buy_time(c, w) {
-                                    Ok(c) => c,
+                                match buy_time(c, w) {
+                                    Ok(c) => Some(c),
                                     Err(e) => {
                                         if !c.updates.iter().any(|u| *u == e.to_string()) {
                                             c.updates.push(e.to_string());
                                         }
                                         continue;
                                     }
-                                };
-                                let new = Purchase {
-                                    bought: 1,
-                                    cost: cost as u128,
-                                };
-                                Some((PurchaseType::Chrono, new))
+                                }
                             }
                             _ => None,
                         };
@@ -162,7 +147,10 @@ pub fn boost_cost(cps: u64) -> u64 {
     1u64.checked_shl(v).unwrap_or(0)
 }
 
-fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Error> {
+fn buy_boost(
+    connection: &mut Connection,
+    wallet: &mut Wallet,
+) -> Result<(PurchaseType, Purchase), Error> {
     if connection.miner.cps < 1024 {
         return Err(Error::new(
             ErrorKind::InvalidData,
@@ -182,9 +170,16 @@ fn buy_boost(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Er
             format!("You need {} idlecoins to purchase boost\n", cost),
         ));
     }
-    connection.miner.boost = connection.miner.boost.saturating_add(128);
+    let bought: usize = 128;
+    connection.miner.boost = connection.miner.boost.saturating_add(bought as u64);
 
-    Ok(cost)
+    Ok((
+        PurchaseType::Boost,
+        Purchase {
+            bought,
+            cost: cost as u128,
+        },
+    ))
 }
 
 pub fn miner_cost(max_miners: u64) -> u64 {
@@ -195,7 +190,7 @@ pub fn miner_cost(max_miners: u64) -> u64 {
     }
 }
 
-fn buy_miner(mut wallet: &mut Wallet) -> Result<u64, Error> {
+fn buy_miner(mut wallet: &mut Wallet) -> Result<(PurchaseType, Purchase), Error> {
     if wallet.max_miners >= ABS_MAX_MINERS {
         return Err(Error::new(
             ErrorKind::InvalidData,
@@ -212,14 +207,23 @@ fn buy_miner(mut wallet: &mut Wallet) -> Result<u64, Error> {
     };
     wallet.max_miners += 1;
 
-    Ok(cost)
+    Ok((
+        PurchaseType::Miner,
+        Purchase {
+            bought: 1,
+            cost: cost as u128,
+        },
+    ))
 }
 
 pub fn time_cost() -> u64 {
     1000
 }
 
-fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Error> {
+fn buy_time(
+    connection: &mut Connection,
+    wallet: &mut Wallet,
+) -> Result<(PurchaseType, Purchase), Error> {
     if wallet.sub_chronocoins(time_cost()).is_err() {
         return Err(Error::new(
             ErrorKind::InvalidData,
@@ -227,7 +231,8 @@ fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Err
         ));
     }
 
-    let mut c = 60 * 60;
+    let bought = 60 * 60;
+    let mut c = bought;
     loop {
         miner_session(&mut connection.miner);
         c -= 1;
@@ -236,5 +241,11 @@ fn buy_time(connection: &mut Connection, wallet: &mut Wallet) -> Result<u64, Err
         }
     }
 
-    Ok(time_cost())
+    Ok((
+        PurchaseType::Chrono,
+        Purchase {
+            bought,
+            cost: time_cost() as u128,
+        },
+    ))
 }
