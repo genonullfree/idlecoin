@@ -150,6 +150,15 @@ fn main() -> Result<(), Error> {
                 }
             };
 
+            // Set write timeout
+            match s.set_write_timeout(Some(Duration::from_millis(500))) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("Unable to set write timeout: {e}");
+                    continue;
+                }
+            };
+
             let updates = vec![format!(
                 "\nLogged in as Wallet: {}0x{:016x}{} Miner: {}0x{:08x}{}\n",
                 PURPLE, miner.wallet_id, RST, BLUE, miner.miner_id, RST
