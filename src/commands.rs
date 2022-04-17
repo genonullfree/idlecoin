@@ -121,6 +121,12 @@ pub fn read_inputs(
         // Purchase notification updates
         for (k, p) in upgrades.iter() {
             let t: DateTime<Local> = Local::now();
+
+            // Skip if nothing was purchased
+            if p.cost == 0 {
+                continue;
+            }
+
             match k {
                 PurchaseType::Boost => msg.insert(
                     0,
@@ -174,6 +180,12 @@ pub fn boost_cost(cps: u64) -> u64 {
     1u64.checked_shl(v).unwrap_or(0)
 }
 
+pub fn boost_max_cost(cps: u64, boost: u64) -> u64 {
+    let cost = boost_cost(cps);
+    let left = (u16::MAX as u64 - boost) / 128;
+    cost * left
+}
+
 fn buy_boost(
     connection: &mut Connection,
     wallet: &mut Wallet,
@@ -184,7 +196,7 @@ fn buy_boost(
             "You need at least 1024 Cps to be able to purchase boost\n",
         ));
     }
-    if connection.miner.boost > u16::MAX as u64 {
+    if connection.miner.boost >= u16::MAX as u64 - 128 {
         return Err(Error::new(
             ErrorKind::InvalidData,
             "You cannot purchase any more boost right now\n",
@@ -199,6 +211,9 @@ fn buy_boost(
     }
     let bought: usize = 128;
     connection.miner.boost = connection.miner.boost.saturating_add(bought as u64);
+    if connection.miner.boost > u16::MAX as u64 {
+        connection.miner.boost = u16::MAX as u64;
+    }
 
     Ok((
         PurchaseType::Boost,
@@ -231,6 +246,20 @@ pub fn miner_cost(max_miners: u64) -> u64 {
     } else {
         u64::MAX / (0x100000 >> (max_miners - 5))
     }
+}
+
+pub fn miner_max_cost(max_miners: u64) -> u128 {
+    let mut max = max_miners;
+    let mut cost = 0u128;
+    loop {
+        if max <= ABS_MAX_MINERS {
+            cost += miner_cost(max) as u128;
+            max += 1;
+        } else {
+            break;
+        }
+    }
+    cost
 }
 
 fn buy_miner(mut wallet: &mut Wallet) -> Result<(PurchaseType, Purchase), Error> {
@@ -276,6 +305,10 @@ pub fn time_cost() -> u64 {
     1000
 }
 
+pub fn time_max_cost(chrono: u64) -> u64 {
+    (chrono / 1000) * 1000
+}
+
 fn buy_time(
     connection: &mut Connection,
     wallet: &mut Wallet,
@@ -287,8 +320,7 @@ fn buy_time(
         ));
     }
 
-    let bought = 60 * 60;
-    let mut c = bought;
+    let mut c = 60 * 60;
     loop {
         miner_session(&mut connection.miner);
         c -= 1;
@@ -300,7 +332,7 @@ fn buy_time(
     Ok((
         PurchaseType::Chrono,
         Purchase {
-            bought,
+            bought: 1,
             cost: time_cost() as u128,
         },
     ))

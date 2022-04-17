@@ -166,11 +166,11 @@ pub fn miner_session(mut miner: &mut Miner) {
     }
 
     // Increment cps
-    let increase = if miner.boost > 0 {
+    miner.inc = if miner.boost > 0 {
         miner.boost -= 1;
-        (miner.inc + miner.level) * 3
+        miner.inc.saturating_add(miner.level * 3)
     } else {
-        miner.inc + miner.level
+        miner.inc.saturating_add(miner.level)
     };
-    miner.cps = miner.cps.saturating_add(increase);
+    miner.cps = miner.cps.saturating_add(miner.inc);
 }

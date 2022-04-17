@@ -395,8 +395,11 @@ fn print_wallets(
                     if c.miner.cps > 1024 {
                         c.purchases.push(
                             format!(
-                                "'b'<enter>\tPurchase 128 seconds of Miner Boost for {} idlecoin\n",
-                                commands::boost_cost(c.miner.cps)
+                                "{}b{}: Purchase 128 seconds of Miner Boost for {} idlecoin / {}B{}: Purchase Max for {} idlecoin\n",
+                                RED, RST,
+                                commands::boost_cost(c.miner.cps),
+                                RED, RST,
+                                commands::boost_max_cost(c.miner.cps, c.miner.boost),
                             )
                             .to_string(),
                         );
@@ -405,13 +408,13 @@ fn print_wallets(
                     if g.max_miners < ABS_MAX_MINERS && (g.idlecoin > miner_cost || g.supercoin > 1)
                     {
                         c.purchases.push(format!(
-                            "'m'<enter>\tPurchase 1 Miner License for {} idlecoin\n",
-                            miner_cost
+                            "{}m{}: Purchase 1 Miner License for {} idlecoin\n",
+                            RED, RST, miner_cost
                         ));
                     }
                 }
                 if g.chronocoin > commands::time_cost() {
-                    c.purchases.push(format!("'c'<enter>\tPurchase 60m of time travel for this miner for {} chronocoins\n", commands::time_cost()));
+                    c.purchases.push(format!("{}c{}: Purchase 1 hour of time travel for this miner for {} chronocoin / {}C{}: Purchase Max for {} chronocoin\n", RED, RST,commands::time_cost(), RED, RST,commands::time_max_cost(g.chronocoin)));
                 }
 
                 // Build miner display
