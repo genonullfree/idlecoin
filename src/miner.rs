@@ -47,8 +47,8 @@ pub fn action_miners(
                 }
             }
             drop(wal);
-        } else if x % 10000 == 0 {
-            // 0.01 % chance
+        } else if x % 100000 == 0 {
+            // 0.001 % chance
             let level = c.miner.level;
             c.miner.dec_level();
             if level != c.miner.level {
@@ -63,8 +63,8 @@ pub fn action_miners(
                     ),
                 );
             }
-        } else if x % 10000 <= 2 {
-            // 0.02 % chance
+        } else if x % 100000 <= 2 {
+            // 0.002 % chance
             let level = c.miner.level;
             c.miner.inc_level();
             if level != c.miner.level {
@@ -79,8 +79,8 @@ pub fn action_miners(
                     ),
                 );
             };
-        } else if x % 10000 <= 3 {
-            // .01 % chance
+        } else if x % 100000 <= 3 {
+            // .001 % chance
             c.miner.cps += c.miner.cps.saturating_div(10);
             msg.insert(
                 0,
@@ -166,11 +166,11 @@ pub fn miner_session(mut miner: &mut Miner) {
     }
 
     // Increment cps
-    let increase = if miner.boost > 0 {
+    miner.inc = if miner.boost > 0 {
         miner.boost -= 1;
-        (miner.inc + miner.level) * 3
+        miner.inc.saturating_add(miner.level * miner.level * 3)
     } else {
-        miner.inc + miner.level
+        miner.inc.saturating_add(miner.level * miner.level)
     };
-    miner.cps = miner.cps.saturating_add(increase);
+    miner.cps = miner.cps.saturating_add(miner.inc);
 }

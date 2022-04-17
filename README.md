@@ -13,12 +13,7 @@ This is an idle game where the point is to open a netcat connection to the serve
 
 The game has evolved to become semi-interactive, as there is now an element of purchasing upgrades to improve the performance of your miners, but this is entirely optional.
 
-## Use
-
-To start, run the `idlecoin` server:
-```rust
-cargo run --release
-```
+## Start Client Miner
 
 To join a server, use `netcat` or `telnet` to connect to the server:
 ```bash
@@ -28,9 +23,16 @@ nc 127.0.0.1 7654
 telnet localhost 7654
 ```
 
+## Start Server
+
+To start, run the `idlecoin` server:
+```rust
+cargo run --release
+```
+
 The stats are written out to a file `.idlecoin` in the working directory of the server upon exit. On start, `idlecoin` will attempt to open `.idlecoin` and ingest the stats file to allow loading of previous stats. The stats file will currently autosave every 5 minutes.
 
-## Output
+## Client Output
 
 ```
 [007] Wallet 0x9d75d7d276240c38 Miner Licenses: 5 Chronocoin: 8850 Randocoin: 208 Coins: 0:24436823427358 Total Cps: 10
@@ -103,9 +105,9 @@ These events are newest on top, and only the most recent 5 are displayed.
 
 These events can be a mix of users purchasing upgrades for their miners or special random events that can happen:
 
-1. Gain 10% CPS -- 0.01% chance
-1. Gain 1 Level -- 0.02% chance
-1. Lose 1 Level -- 0.01% chance
+1. Gain 10% CPS -- 0.001% chance
+1. Gain 1 Level -- 0.002% chance
+1. Lose 1 Level -- 0.001% chance
 1. IRS auditing -- 0.00000006430041152263% chance
 
 ### Purchasing Upgrades
